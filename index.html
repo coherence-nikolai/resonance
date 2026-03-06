@@ -492,7 +492,6 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
 .body-node{position:absolute;left:50%;transform:translate(-50%,-50%);background:none;border:1px solid rgba(201,169,110,.18);border-radius:999px;color:rgba(240,230,208,.45);padding:10px 18px;min-height:42px;letter-spacing:.10em;font-size:clamp(11px,2.8vw,13px);cursor:pointer;transition:all .3s ease;-webkit-tap-highlight-color:transparent;}
 .body-node:hover,.body-node.active{border-color:rgba(201,169,110,.72);color:rgba(240,204,136,.92);box-shadow:0 0 18px rgba(240,204,136,.12);}
 #decBodyPrompt{font-size:var(--fs);color:var(--cream-ghost);line-height:1.7;max-width:280px;}
-#homeMicroSub{font-size:var(--fl);color:rgba(201,169,110,.30);letter-spacing:.08em;margin-top:-32px;margin-bottom:24px;}
 
 
 
@@ -690,13 +689,8 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
     align-items:center;justify-content:center;gap:20px;
     padding:clamp(24px,6vw,48px);padding-top:calc(56px + clamp(24px,6vw,48px));
     text-align:center;opacity:0;transition:opacity 1s ease;pointer-events:none;">
-    <div id="dec-btext" style="font-size:var(--fh);font-weight:300;letter-spacing:.10em;
-      color:rgba(240,230,208,.45);
-      height:72px;display:flex;align-items:center;justify-content:center;
-      width:100%;max-width:320px;text-align:center;
-      transition:opacity 0.7s ease;opacity:0;overflow:hidden;line-height:1.4;"></div>
-    <div id="dec-bp-wrap" style="position:relative;width:80px;height:80px;display:flex;align-items:center;
-      justify-content:center;">
+    <div id="dec-bp-wrap" style="position:fixed;left:50%;top:58vh;transform:translate(-50%,-50%);width:80px;height:80px;display:flex;align-items:center;
+      justify-content:center;pointer-events:none;">
       <div class="dec-ripple" id="dec-rip0"></div>
       <div class="dec-ripple" id="dec-rip1"></div>
       <div class="dec-ripple" id="dec-rip2"></div>
@@ -705,15 +699,20 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
         transition:transform 4s cubic-bezier(.4,0,.2,1),filter 4s ease,
         background 3s ease,box-shadow 3s ease,opacity 1s ease;opacity:0;"></div>
     </div>
-    <div id="dec-bdots" style="display:flex;gap:12px;">
+    <div id="dec-bdots" style="position:fixed;left:50%;top:67vh;transform:translate(-50%,-50%);display:flex;gap:12px;">
       <div class="bdot" id="dec-dot0"></div>
       <div class="bdot" id="dec-dot1"></div>
       <div class="bdot" id="dec-dot2"></div>
     </div>
+    <div id="dec-btext" style="position:fixed;left:50%;top:74vh;transform:translate(-50%,-50%);font-size:var(--fh);font-weight:300;letter-spacing:.10em;
+      color:rgba(240,230,208,.45);
+      min-height:44px;display:flex;align-items:center;justify-content:center;
+      width:88vw;max-width:360px;text-align:center;
+      transition:opacity 0.7s ease;opacity:0;overflow:hidden;line-height:1.4;"></div>
   </div>
   <!-- Word lives in breath layer — not fixed, so display:none on parent hides it properly -->
   <div id="dec-word-wrap" style="position:fixed;
-    top:50vh;left:50%;
+    top:42vh;left:50%;
     transform:translate(-50%,-50%);text-align:center;pointer-events:none;z-index:15;
     width:88vw;max-width:360px;">
     <div id="dec-word" style="font-size:clamp(28px,7vw,48px);font-weight:300;

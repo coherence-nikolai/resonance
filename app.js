@@ -1362,7 +1362,7 @@ function startDecAcknowledge() {
     span.style.cssText = 'display:inline-block;transition:none;';
     wordEl.appendChild(span);
   });
-  ackLine.textContent = lang==='en' ? 'seen.' : 'visto.';
+  ackLine.textContent = '';
 
   // Reset breath layer elements
   [0,1,2].forEach(i => {
@@ -1380,13 +1380,11 @@ function startDecAcknowledge() {
 
       // Fade word in
       setTimeout(() => { wordEl.style.opacity = '1'; }, 100);
-      // Fade ack layer in (contains "yes. this is real.")
-      setTimeout(() => { ackLayer.style.opacity = '1'; }, 200);
-      // Fade ack line in after word settles
-      setTimeout(() => { ackLine.style.opacity = '1'; }, 1400);
+      // Keep acknowledgement layer quiet
+      setTimeout(() => { ackLayer.style.opacity = '0'; }, 200);
 
-      // After 5s — cross-fade: ack layer out, breath layer in (word stays put)
-      setTimeout(() => startDecBreath(displayName), 5000);
+      // Move into breath sooner, without the extra secondary word
+      setTimeout(() => startDecBreath(displayName), 3200);
     }));
   });
 }
@@ -1799,11 +1797,11 @@ const BODY_SPOTS = {
   ]
 };
 const DEC_BODY_POS = {
-  head:   {particleTop:'28vh', wordTop:'28vh'},
-  throat: {particleTop:'38vh', wordTop:'38vh'},
-  chest:  {particleTop:'48vh', wordTop:'48vh'},
-  stomach:{particleTop:'58vh', wordTop:'58vh'},
-  pelvis: {particleTop:'68vh', wordTop:'68vh'}
+  head:   {wordTop:'24vh', particleTop:'36vh', dotsTop:'46vh', textTop:'54vh'},
+  throat: {wordTop:'30vh', particleTop:'42vh', dotsTop:'52vh', textTop:'60vh'},
+  chest:  {wordTop:'36vh', particleTop:'50vh', dotsTop:'60vh', textTop:'68vh'},
+  stomach:{wordTop:'42vh', particleTop:'58vh', dotsTop:'68vh', textTop:'76vh'},
+  pelvis: {wordTop:'48vh', particleTop:'66vh', dotsTop:'76vh', textTop:'84vh'}
 };
 
 const _applyLangV2 = applyLang;
@@ -1811,14 +1809,8 @@ applyLang = function() {
   _applyLangV2();
   const homeSub = document.getElementById('homeFieldSub');
   if (homeSub) homeSub.textContent = lang === 'en' ? 'Choose your practice.' : 'Elige tu práctica.';
-  let micro = document.getElementById('homeMicroSub');
-  if (!micro) {
-    micro = document.createElement('div');
-    micro.id = 'homeMicroSub';
-    const ref = document.getElementById('homeCount');
-    if (ref && ref.parentNode) ref.parentNode.insertBefore(micro, ref);
-  }
-  micro.textContent = lang === 'en' ? 'Notice what the moment needs.' : 'Nota lo que este momento necesita.';
+  const micro = document.getElementById('homeMicroSub');
+  if (micro) micro.remove();
   const input = document.getElementById('apiKeyInput');
   if (input) input.placeholder = lang === 'en' ? 'enter API key' : 'ingresa tu clave API';
 };
@@ -1828,8 +1820,12 @@ goHome = function() {
   clearStormTimer();
   const wrap = document.getElementById('dec-word-wrap');
   const bw = document.getElementById('dec-bp-wrap');
-  if (wrap) wrap.style.top = '50vh';
-  if (bw) bw.style.top = '';
+  const btext = document.getElementById('dec-btext');
+  const bdots = document.getElementById('dec-bdots');
+  if (wrap) wrap.style.top = '42vh';
+  if (bw) bw.style.top = '58vh';
+  if (btext) btext.style.top = '74vh';
+  if (bdots) bdots.style.top = '67vh';
   _goHomeV2();
 };
 
@@ -1856,85 +1852,48 @@ const _buildObsSetupScreen = buildObsSetupScreen;
 buildObsSetupScreen = function() {
   const t = lang === 'en';
   const screen = document.getElementById('s-observe');
-  screen.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.id = 'obs-setup';
-  wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(26px,7vw,42px);padding:clamp(24px,6vw,48px);width:100%;max-width:400px;margin:auto;opacity:0;transition:opacity 1.2s ease;';
-  const title = document.createElement('div');
-  title.className = 'observe-alt-title';
-  title.textContent = t ? 'observe' : 'observar';
-  wrap.appendChild(title);
-  const modeSection = document.createElement('div');
-  modeSection.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;';
-  const modeLabel = document.createElement('div');
-  modeLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);';
-  modeLabel.textContent = t ? 'mode' : 'modo';
-  modeSection.appendChild(modeLabel);
-  const modeRow = document.createElement('div');
-  modeRow.className = 'sense-row';
-  [
-    {id:'drift', label:t?'drift':'deriva'},
-    {id:'kasina', label:'kasina'},
-    {id:'noting', label:t?'noting':'notar'}
-  ].forEach(m => {
-    const b = document.createElement('button');
-    b.id = 'obs-mode-' + m.id;
-    b.className = 'mode-chip';
-    b.textContent = m.label;
-    b.addEventListener('click', () => setObsMode(m.id));
-    modeRow.appendChild(b);
-  });
-  modeSection.appendChild(modeRow);
-  wrap.appendChild(modeSection);
+  screen.innerHTML = `
+    <div id="obs-setup" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(26px,7vw,42px);padding:clamp(24px,6vw,48px);width:100%;max-width:400px;margin:auto;opacity:0;transition:opacity 1.2s ease;pointer-events:all;">
+      <div class="observe-alt-title">${t ? 'observe' : 'observar'}</div>
 
-  const stormWrap = document.createElement('div');
-  stormWrap.id = 'stormWrap';
-  stormWrap.style.cssText = 'display:none;flex-direction:column;align-items:center;gap:12px;width:100%;';
-  const stormLabel = document.createElement('div');
-  stormLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);';
-  stormLabel.textContent = t ? 'noting style' : 'estilo de notar';
-  stormWrap.appendChild(stormLabel);
-  const srow = document.createElement('div');
-  srow.className = 'storm-row';
-  [
-    {id:'calm', label:t?'normal':'normal'},
-    {id:'storm', label:t?'storm':'tormenta'}
-  ].forEach(m => {
-    const b = document.createElement('button');
-    b.id = 'obs-storm-' + m.id;
-    b.className = 'storm-chip';
-    b.textContent = m.label;
-    b.addEventListener('click', () => setStormMode(m.id === 'storm'));
-    srow.appendChild(b);
-  });
-  stormWrap.appendChild(srow);
-  wrap.appendChild(stormWrap);
+      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;">
+        <div style="font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);">${t ? 'mode' : 'modo'}</div>
+        <div class="sense-row">
+          <button type="button" id="obs-mode-drift" class="mode-chip" onclick="setObsMode('drift')">${t ? 'drift' : 'deriva'}</button>
+          <button type="button" id="obs-mode-kasina" class="mode-chip" onclick="setObsMode('kasina')">kasina</button>
+          <button type="button" id="obs-mode-noting" class="mode-chip" onclick="setObsMode('noting')">${t ? 'noting' : 'notar'}</button>
+        </div>
+      </div>
 
-  const timeSection = document.createElement('div');
-  timeSection.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;';
-  const timeLabel = document.createElement('div');
-  timeLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);';
-  timeLabel.textContent = t ? 'duration' : 'duración';
-  timeSection.appendChild(timeLabel);
-  const timeRow = document.createElement('div');
-  timeRow.className = 'sense-row';
-  [1,5,10].forEach(m => {
-    const b = document.createElement('button');
-    b.id = 'obs-time-' + m;
-    b.className = 'mode-chip';
-    b.textContent = m + 'm';
-    b.addEventListener('click', () => setObsTime(m));
-    timeRow.appendChild(b);
+      <div id="stormWrap" style="display:none;flex-direction:column;align-items:center;gap:12px;width:100%;">
+        <div style="font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);">${t ? 'noting style' : 'estilo de notar'}</div>
+        <div class="storm-row">
+          <button type="button" id="obs-storm-calm" class="storm-chip" onclick="setStormMode(false)">${t ? 'normal' : 'normal'}</button>
+          <button type="button" id="obs-storm-storm" class="storm-chip" onclick="setStormMode(true)">${t ? 'storm' : 'tormenta'}</button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;">
+        <div style="font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);">${t ? 'duration' : 'duración'}</div>
+        <div class="sense-row">
+          <button type="button" id="obs-time-1" class="mode-chip" onclick="setObsTime(1)">1m</button>
+          <button type="button" id="obs-time-5" class="mode-chip" onclick="setObsTime(5)">5m</button>
+          <button type="button" id="obs-time-10" class="mode-chip" onclick="setObsTime(10)">10m</button>
+        </div>
+      </div>
+
+      <button type="button" class="settings-btn" style="min-width:180px;" onclick="enterObserve()">enter</button>
+    </div>`;
+
+  const wrap = document.getElementById('obs-setup');
+  wrap.querySelectorAll('button').forEach(btn => {
+    btn.style.touchAction = 'manipulation';
+    btn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      btn.click();
+    }, { passive: false });
   });
-  timeSection.appendChild(timeRow);
-  wrap.appendChild(timeSection);
-  const enterBtn = document.createElement('button');
-  enterBtn.className = 'settings-btn';
-  enterBtn.style.minWidth = '180px';
-  enterBtn.textContent = t ? 'enter' : 'entrar';
-  enterBtn.addEventListener('click', enterObserve);
-  wrap.appendChild(enterBtn);
-  screen.appendChild(wrap);
+
   requestAnimationFrame(() => requestAnimationFrame(() => { wrap.style.opacity = '1'; }));
   setObsMode(obsMode);
   setObsTime(obsMinutes);
@@ -2173,12 +2132,35 @@ const _startDecBreathV2 = startDecBreath;
 startDecBreath = function(displayName) {
   const wrap = document.getElementById('dec-word-wrap');
   const bw = document.getElementById('dec-bp-wrap');
-  const pos = DEC_BODY_POS[decBodySpot] || DEC_BODY_POS.chest;
-  if (wrap) wrap.style.top = pos.wordTop;
-  if (bw) bw.style.position = 'fixed', bw.style.left = '50%', bw.style.top = pos.particleTop, bw.style.transform = 'translate(-50%,-50%)';
-  _startDecBreathV2(displayName);
   const btext = document.getElementById('dec-btext');
-  const origText = btext ? btext.textContent : '';
+  const bdots = document.getElementById('dec-bdots');
+  const pos = DEC_BODY_POS[decBodySpot] || DEC_BODY_POS.chest;
+  if (wrap) {
+    wrap.style.top = pos.wordTop;
+    wrap.style.left = '50%';
+    wrap.style.transform = 'translate(-50%,-50%)';
+  }
+  if (bw) {
+    bw.style.position = 'fixed';
+    bw.style.left = '50%';
+    bw.style.top = pos.particleTop;
+    bw.style.transform = 'translate(-50%,-50%)';
+  }
+  if (bdots) {
+    bdots.style.position = 'fixed';
+    bdots.style.left = '50%';
+    bdots.style.top = pos.dotsTop;
+    bdots.style.transform = 'translate(-50%,-50%)';
+  }
+  if (btext) {
+    btext.style.position = 'fixed';
+    btext.style.left = '50%';
+    btext.style.top = pos.textTop;
+    btext.style.transform = 'translate(-50%,-50%)';
+    btext.style.height = 'auto';
+    btext.style.minHeight = '44px';
+  }
+  _startDecBreathV2(displayName);
   setTimeout(() => {
     const el = document.getElementById('dec-btext');
     if (el) el.textContent = lang === 'en' ? 'exhale slowly · let it leave the body' : 'exhala despacio · deja que salga del cuerpo';
@@ -2186,3 +2168,15 @@ startDecBreath = function(displayName) {
 };
 
 applyLang();
+
+const _setObsTimeV4 = typeof setObsTime === 'function' ? setObsTime : null;
+setObsTime = function(mins) {
+  obsMinutes = mins;
+  [1,5,10].forEach(m => {
+    const el = document.getElementById('obs-time-' + m);
+    if (el) el.classList.toggle('active', m === mins);
+  });
+  if (_setObsTimeV4 && _setObsTimeV4 !== setObsTime) {
+    try { _setObsTimeV4(mins); } catch(e) {}
+  }
+};

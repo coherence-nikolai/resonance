@@ -213,7 +213,7 @@ function getImagination(lang, stateName) {
 const WITNESSED = {
   en: {
     Anxious:      "You were never meant to hold all of it.",
-    Heavy:        "It was real. It doesn't have to stay.",
+    Heavy:        "What was heavy has passed.",
     Stuck:        "The field always had more directions than one.",
     Numb:         "Feeling less was how you survived. You can feel more now.",
     Scattered:    "Every part of you was trying. That was enough.",
@@ -225,7 +225,7 @@ const WITNESSED = {
   },
   es: {
     Angustiado:   "Nunca tuviste que cargar con todo eso.",
-    Agobiado:     "Era real. No tiene que quedarse.",
+    Agobiado:     "Lo pesado ya pasó.",
     Bloqueado:    "El campo siempre tuvo más direcciones que una.",
     Apagado:      "Sentir menos era como sobrevivías. Ahora puedes sentir más.",
     Disperso:     "Cada parte de ti lo intentaba. Eso fue suficiente.",
