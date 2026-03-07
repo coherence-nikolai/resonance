@@ -1551,15 +1551,10 @@ function buildObsSetupScreen() {
 }
 
 function updateDurationVisibility() {
-  // [UX6] Show/hide 1m button based on mode
+  // 1m available for all modes — short sits matter
   const btn1m = document.getElementById('obs-time-1');
   if (!btn1m) return;
-  const isNoting = obsMode === 'noting';
-  btn1m.style.display = isNoting ? '' : 'none';
-  // If 1m was selected and we're switching away from noting, bump to 5m
-  if (!isNoting && obsMinutes === 1) {
-    setObsTime(5);
-  }
+  btn1m.style.display = '';
 }
 
 function setObsMode(mode) {
@@ -2829,6 +2824,22 @@ function showBodyMap(mode, payload) {
     watermarkEl.textContent = decStateName || '';
     wrap.appendChild(watermarkEl);
 
+    // Zone definitions — must be declared before DOM label loop below
+    const SPOT_BANDS_Y = {
+      head:    [0.00, 0.18],
+      throat:  [0.13, 0.24],
+      chest:   [0.20, 0.42],
+      stomach: [0.40, 0.54],
+      pelvis:  [0.52, 0.70],
+    };
+    const ZONES = [
+      { key:'head',    labelY: 0.08 },
+      { key:'throat',  labelY: 0.21 },
+      { key:'chest',   labelY: 0.33 },
+      { key:'stomach', labelY: 0.49 },
+      { key:'pelvis',  labelY: 0.64 },
+    ];
+
     // DOM zone labels — right-aligned left of figure, never clip
     const ZONE_LABELS = {
       en: { head:'head', throat:'throat', chest:'chest', stomach:'stomach', pelvis:'pelvis' },
@@ -2883,23 +2894,6 @@ function showBodyMap(mode, payload) {
       [0.59, 0.725, 1.0, 4], [0.66, 0.72, 1.1, 4],
       [0.33, 0.79, 1.0, 4], [0.40, 0.795, 0.9, 3],
       [0.60, 0.795, 0.9, 3], [0.67, 0.79, 1.0, 4],
-    ];
-
-    const SPOT_BANDS_Y = {
-      head:    [0.00, 0.18],
-      throat:  [0.13, 0.24],
-      chest:   [0.20, 0.42],
-      stomach: [0.40, 0.54],
-      pelvis:  [0.52, 0.70],
-    };
-
-    // Zone label positions (fraction of figure height from top)
-    const ZONES = [
-      { key:'head',    labelY: 0.08 },
-      { key:'throat',  labelY: 0.21 },
-      { key:'chest',   labelY: 0.33 },
-      { key:'stomach', labelY: 0.49 },
-      { key:'pelvis',  labelY: 0.64 },
     ];
 
     let activeSpot = null;
