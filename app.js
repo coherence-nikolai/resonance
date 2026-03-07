@@ -204,6 +204,12 @@ class BreathOrb {
     this.wordText = '';
     this.wordAlpha = 0;
     this.wordTargetAlpha = 0;
+    // Morph phase
+    this.wordScale = 1;
+    this.morphStartY = 0;
+    this.MORPH_DURATION = 2800; // ms for lift animation
+    this.MORPH_LIFT = innerHeight * 0.55; // how far it rises
+    this.onMorphDone = null;
   }
 
   get elapsed() { return performance.now() - this.phaseStart; }
@@ -280,11 +286,33 @@ class BreathOrb {
       if (t > this.REST) this.startPhase('inhale');
 
     } else if (this.phase === 'crystallised') {
-      // Final collapse — steady bright defined point
+      // Final collapse — steady bright defined point, then morph begins
       const age = Math.min(t / 1400, 1);
       targetRadius = 9 + 6 * Math.sin(age * Math.PI * 0.5);
       targetBlur   = 0;
       targetGlow   = 1.5 + 0.5 * Math.sin(t * 0.003); // slow pulse
+
+    } else if (this.phase === 'morph') {
+      // Word and orb contract to bright point, then particle lifts upward
+      const p = Math.min(t / this.MORPH_DURATION, 1);
+      const ease = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2,2)/2;
+
+      // Orb contracts to near-zero
+      targetRadius = 9 * (1 - ease * 0.85);
+      targetBlur   = 0;
+      targetGlow   = 1.5 + ease * 2.5; // gets intensely bright as it contracts
+
+      // Word contracts toward orb centre (alpha driven separately below)
+      this.wordScale = 1 - ease;
+
+      // Lift upward — start slow, accelerate
+      const liftEase = Math.pow(p, 2);
+      this.y = this.morphStartY - liftEase * this.MORPH_LIFT;
+
+      if (t > this.MORPH_DURATION) {
+        this.phase = 'done';
+        if (this.onMorphDone) this.onMorphDone();
+      }
     }
 
     // Smooth lerp toward targets (speed varies by phase for feel)
@@ -371,19 +399,26 @@ class BreathOrb {
     // ── State word — drawn centred in orb, fades over 3 cycles ──
     if (this.wordText && this.wordAlpha > 0.01) {
       const wordA = this.wordAlpha * this.alpha;
-      // Word blurs slightly when orb expands (inhale/hold), sharpens on exhale
-      const wordBlur = Math.min(bl * 0.35, 4);
+      // Blur: breath 1 = very blurry (dream), breath 2 = soft, breath 3 = sharp
+      const cycleBlurFactor = Math.max(0, 1 - this.cycleCount * 0.45);
+      const wordBlur = bl * 0.2 + cycleBlurFactor * 10;
       cx.save();
       if (wordBlur > 0.5) cx.filter = `blur(${wordBlur.toFixed(1)}px)`;
       cx.globalAlpha = wordA;
-      const fontSize = Math.max(18, Math.min(38, innerWidth * 0.07));
-      cx.font = `300 ${fontSize}px 'Cormorant Garamond', Georgia, serif`;
+      // Big — 16% of screen width, scale contracts during morph
+      const baseFontSize = Math.max(28, Math.min(72, innerWidth * 0.16));
+      const fontSize = baseFontSize * (this.wordScale !== undefined ? this.wordScale : 1);
+      if (fontSize < 2) { cx.restore(); return; }
+      cx.font = `300 ${fontSize.toFixed(1)}px 'Cormorant Garamond', Georgia, serif`;
       cx.textAlign = 'center';
       cx.textBaseline = 'middle';
-      // Glow under text
-      cx.shadowColor = `rgba(240,210,140,${(wordA * 0.6).toFixed(2)})`;
-      cx.shadowBlur = 12 + (1 - wordA) * 8;
-      cx.fillStyle = `rgba(240,225,190,${wordA.toFixed(3)})`;
+      // Glow intensifies each cycle
+      const glowStrength = 0.4 + this.cycleCount * 0.25;
+      cx.shadowColor = `rgba(240,210,140,${(wordA * glowStrength).toFixed(2)})`;
+      cx.shadowBlur = 18 + this.cycleCount * 12;
+      // Colour brightens each cycle: cycle 1 = dim, 3 = crystalline
+      const brightness = 180 + this.cycleCount * 25;
+      cx.fillStyle = `rgba(${brightness+15},${brightness},${brightness-40},${wordA.toFixed(3)})`;
       cx.fillText(this.wordText, px, py);
       cx.shadowBlur = 0;
       cx.filter = 'none';
@@ -2427,20 +2462,34 @@ function startBreath() {
   breathOrb.onCyclesDone = () => {
     breathRunning = false;
     btext.style.transition = 'opacity 0.9s ease'; btext.style.opacity = '0';
-    // Seamless handoff — particle inherits orb's exact centre position
-    if (chosen) {
-      const ox = breathOrb ? breathOrb.x : innerWidth * 0.5;
-      const oy = breathOrb ? breathOrb.y : innerHeight * 0.5;
-      chosen.x  = ox; chosen.y  = oy;
-      chosen.cx = ox / innerWidth;
-      chosen.cy = oy / innerHeight;
-      chosen.targetAlpha = 1; chosen.targetClarity = 1; chosen._flickering = false;
-    }
-    // Null orb one frame later so particle draws from same position with no gap
-    requestAnimationFrame(() => { breathOrb = null; });
-    initScene('state_chosen', spChosen);
-    const tapEl = document.getElementById('tapNext');
-    bDelay(() => { tapEl.style.transition = 'opacity 0.8s ease'; tapEl.style.opacity = '1'; }, 1600);
+
+    // Hold crystallised for 800ms so user sees the bright point, then morph
+    setTimeout(() => {
+      if (!breathOrb) return;
+      breathOrb.morphStartY = breathOrb.y;
+      breathOrb.wordTargetAlpha = 0; // word fades as orb lifts
+      breathOrb.startPhase('morph');
+
+      breathOrb.onMorphDone = () => {
+        // Particle inherits orb's final lifted position
+        if (chosen) {
+          chosen.x  = breathOrb ? breathOrb.x : innerWidth * 0.5;
+          chosen.y  = breathOrb ? breathOrb.y : innerHeight * 0.2;
+          chosen.cx = chosen.x / innerWidth;
+          chosen.cy = chosen.y / innerHeight;
+          // Particle target — settle to upper third
+          chosen.targetCx = 0.5;
+          chosen.targetCy = 0.14;
+          chosen.targetAlpha = 1;
+          chosen.targetClarity = 1;
+          chosen._flickering = false;
+        }
+        requestAnimationFrame(() => { breathOrb = null; });
+        initScene('state_chosen', spChosen);
+        const tapEl = document.getElementById('tapNext');
+        bDelay(() => { tapEl.style.transition = 'opacity 0.8s ease'; tapEl.style.opacity = '1'; }, 1600);
+      };
+    }, 800);
   };
 }
 
