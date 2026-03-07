@@ -3475,8 +3475,8 @@ function startLandingScreen() {
       const eased = 1 - Math.pow(1 - t, 3);
 
       // Particle shrinks and sharpens to nothing
-      const r = (3 + focusLevel * 6) * breathe * (1 - eased);
-      const gR = r * (6 - eased * 4);
+      const r = (9 + focusLevel * 6) * breathe * (1 - eased);
+      const gR = r * (4.5 - eased * 3);
       const alpha = 1 - eased;
 
       // Glow
@@ -3510,16 +3510,15 @@ function startLandingScreen() {
         return;
       }
     } else {
-      // Normal drifting particle
-      // Size: tiny when blurry, grows a little on focus
-      const coreR = (2.5 + focusLevel * 5) * breathe;
-      const glowR = coreR * (8 - focusLevel * 4); // big hazy glow when unfocused, tighter when focused
-      const coreAlpha = 0.18 + focusLevel * 0.65;
-      const glowAlpha = 0.06 + focusLevel * 0.18;
+      // Normal drifting particle — same scale as app SpParticles
+      const coreR = (9 + focusLevel * 6) * breathe;
+      const glowR = coreR * (4.5 - focusLevel * 2); // wide hazy glow when unfocused, tighter when focused
+      const coreAlpha = 0.32 + focusLevel * 0.55;
+      const glowAlpha = 0.10 + focusLevel * 0.20;
 
       // Soft gaussian glow
       const g = lc.createRadialGradient(px, py, 0, px, py, glowR);
-      g.addColorStop(0, `rgba(240,204,136,${(glowAlpha * 1.5).toFixed(3)})`);
+      g.addColorStop(0, `rgba(240,204,136,${(glowAlpha * 1.8).toFixed(3)})`);
       g.addColorStop(0.3, `rgba(240,204,136,${glowAlpha.toFixed(3)})`);
       g.addColorStop(1, 'rgba(240,204,136,0)');
       lc.fillStyle = g;
@@ -3527,8 +3526,12 @@ function startLandingScreen() {
 
       // Core dot
       lc.globalAlpha = coreAlpha;
-      lc.fillStyle = 'rgba(240,210,140,1)';
+      lc.fillStyle = 'rgba(255,240,200,1)';
       lc.beginPath(); lc.arc(px, py, coreR, 0, Math.PI * 2); lc.fill();
+      // Hot centre
+      lc.globalAlpha = coreAlpha * 0.7;
+      lc.fillStyle = 'rgba(255,255,255,1)';
+      lc.beginPath(); lc.arc(px, py, coreR * 0.35, 0, Math.PI * 2); lc.fill();
       lc.globalAlpha = 1;
     }
 
