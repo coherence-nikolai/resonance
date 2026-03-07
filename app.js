@@ -2811,25 +2811,55 @@ function showBodyMap(mode, payload) {
     wrap.appendChild(fc);
     const fx = fc.getContext('2d');
 
-    // Figure: wider, less cramped, leaves room at bottom for question
-    // Head will be drawn with equal rr on X and Y (circular, not oval)
-    const FIG_TOP  = 0.10,  FIG_BOT = 0.78;  // leaves bottom 22% for question
-    const FIG_L    = 0.18,  FIG_R   = 0.82;  // wider: 64% of screen width
+    // Figure: taller, centred, full use of screen
+    const FIG_TOP  = 0.10,  FIG_BOT = 0.86;
+    const FIG_L    = 0.25,  FIG_R   = 0.75;
     const figH = (FIG_BOT - FIG_TOP) * H;
     const figW = (FIG_R - FIG_L) * W;
     const figX = FIG_L * W, figY = FIG_TOP * H;
 
-    // Question positioned at bottom — already set in initial CSS
+    // Shadow word watermark — faint behind figure, holds concept while user locates in body
+    const watermarkEl = document.createElement('div');
+    watermarkEl.style.cssText = `position:absolute;left:50%;top:48%;
+      transform:translate(-50%,-50%);
+      font-size:clamp(44px,13vw,82px);font-weight:300;
+      font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
+      color:rgba(180,160,210,.07);letter-spacing:.06em;
+      pointer-events:none;z-index:0;white-space:nowrap;`;
+    watermarkEl.textContent = decStateName || '';
+    wrap.appendChild(watermarkEl);
 
-    // Dot positions — head uses equal rr (circular in screen space)
-    const aspectCorrect = figH / figW; // ~1.9 — compensate so head looks round
+    // DOM zone labels — right-aligned left of figure, never clip
+    const ZONE_LABELS = {
+      en: { head:'head', throat:'throat', chest:'chest', stomach:'stomach', pelvis:'pelvis' },
+      es: { head:'cabeza', throat:'garganta', chest:'pecho', stomach:'vientre', pelvis:'pelvis' }
+    };
+    const zoneLabelEls = {};
+    ZONES.forEach((z, idx) => {
+      const lyPct = ((figY + z.labelY * figH) / H * 100).toFixed(1);
+      const el = document.createElement('div');
+      el.style.cssText = `position:absolute;
+        left:clamp(8px, ${(FIG_L * 100 - 18).toFixed(1)}%, ${Math.round(FIG_L * W - 8)}px);
+        top:${lyPct}%;transform:translateY(-50%);
+        font-size:clamp(12px,3.2vw,15px);font-weight:300;
+        font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:.12em;text-transform:uppercase;
+        color:rgba(200,185,215,.32);pointer-events:none;z-index:5;
+        transition:color 0.4s ease,opacity 0.5s ease;white-space:nowrap;
+        opacity:0;text-align:right;
+        right:${(100 - FIG_L * 100 + 2).toFixed(1)}%;left:auto;`;
+      el.textContent = ZONE_LABELS[lang][z.key];
+      wrap.appendChild(el);
+      zoneLabelEls[z.key] = el;
+      setTimeout(() => { el.style.opacity = '1'; }, 80 * idx + 250);
+    });
+
+    // Dot positions — head circular, legs extended
+    const aspectCorrect = figH / figW;
     const BODY_PTS_LOCAL = [
       ...(() => {
-        const pts = []; const hcx=0.5, hcy=0.09, rr=0.065;
-        for(let a=0;a<Math.PI*2;a+=Math.PI/8) {
-          // Equal angular spacing, compensate for tall aspect ratio
-          pts.push([hcx+Math.cos(a)*rr, hcy+Math.sin(a)*rr/aspectCorrect*1.0, 1.5, 8]);
-        }
+        const pts = []; const hcx=0.5, hcy=0.09, rr=0.068;
+        for(let a=0;a<Math.PI*2;a+=Math.PI/8)
+          pts.push([hcx+Math.cos(a)*rr, hcy+Math.sin(a)*rr/aspectCorrect, 1.5, 8]);
         return pts;
       })(),
       [0.5, 0.155, 1.3, 6],
@@ -2846,6 +2876,13 @@ function showBodyMap(mode, payload) {
       [0.86, 0.49, 1.2, 5], [0.88, 0.56, 1.2, 5],
       [0.28, 0.585, 1.5, 7], [0.38, 0.59, 1.2, 5], [0.5, 0.595, 1.3, 5],
       [0.62, 0.59, 1.2, 5], [0.72, 0.585, 1.5, 7],
+      // Legs
+      [0.36, 0.65, 1.2, 5], [0.43, 0.655, 1.1, 4], [0.50, 0.65, 1.1, 4],
+      [0.57, 0.655, 1.1, 4], [0.64, 0.65, 1.2, 5],
+      [0.34, 0.72, 1.1, 4], [0.41, 0.725, 1.0, 4],
+      [0.59, 0.725, 1.0, 4], [0.66, 0.72, 1.1, 4],
+      [0.33, 0.79, 1.0, 4], [0.40, 0.795, 0.9, 3],
+      [0.60, 0.795, 0.9, 3], [0.67, 0.79, 1.0, 4],
     ];
 
     const SPOT_BANDS_Y = {
@@ -2900,9 +2937,9 @@ function showBodyMap(mode, payload) {
         const pulse = inSpot
           ? 0.6 + 0.4 * Math.sin(glowPhase * 2.2)
           : 0.45 + 0.14 * Math.sin(glowPhase + nx * 4);
-        const alpha = inSpot ? 0.85 + 0.15 * pulse : 0.45 + 0.15 * pulse;
-        const glowA = inSpot ? 0.38 * pulse : 0.14 * pulse;
-        const glowRad = inSpot ? gr * 2.2 : gr * 1.4;
+        const alpha = inSpot ? 0.88 + 0.12 * pulse : 0.45 + 0.15 * pulse;
+        const glowA = inSpot ? 0.40 * pulse : 0.14 * pulse;
+        const glowRad = inSpot ? gr * 2.4 : gr * 1.4;
 
         const grad = fx.createRadialGradient(px, py, 0, px, py, glowRad);
         grad.addColorStop(0, `${ptGlowColor}${glowA.toFixed(3)})`);
@@ -2911,21 +2948,7 @@ function showBodyMap(mode, payload) {
         fx.beginPath(); fx.arc(px, py, glowRad, 0, Math.PI*2); fx.fill();
         fx.globalAlpha = alpha;
         fx.fillStyle = ptColor;
-        fx.beginPath(); fx.arc(px, py, r * (inSpot ? 1.8 : 1), 0, Math.PI*2); fx.fill();
-        fx.globalAlpha = 1;
-      });
-
-      // Draw zone labels at LEFT side of figure — clear of the figure outline
-      ZONES.forEach(z => {
-        const lx = figX - figW * 0.06; // left edge with small gap
-        const ly = figY + z.labelY * figH;
-        const isActive = activeSpot === z.key;
-        const lAlpha = isActive ? 0.92 : 0.32 + 0.08 * Math.sin(glowPhase + z.labelY * 5);
-        fx.globalAlpha = lAlpha;
-        fx.font = `300 ${Math.round(figW * 0.11)}px 'Plus Jakarta Sans', sans-serif`;
-        fx.fillStyle = isActive ? 'rgba(210,190,230,1)' : 'rgba(200,185,215,1)';
-        fx.textAlign = 'right'; // right-align so text sits flush against figure left edge
-        fx.fillText(ZONE_LABELS[lang][z.key], lx, ly);
+        fx.beginPath(); fx.arc(px, py, r * (inSpot ? 1.9 : 1), 0, Math.PI*2); fx.fill();
         fx.globalAlpha = 1;
       });
 
@@ -2953,6 +2976,13 @@ function showBodyMap(mode, payload) {
         somatic = true;
         activeSpot = z.key;
 
+        // Highlight the tapped zone label
+        Object.entries(zoneLabelEls).forEach(([k, el]) => {
+          el.style.color = k === z.key
+            ? 'rgba(210,190,235,.92)'
+            : 'rgba(200,185,215,.12)';
+        });
+
         // Play zone tone
         if (audioCtx) {
           const zoneFreqs = { head:1056, throat:792, chest:528, stomach:396, pelvis:264 };
@@ -2965,26 +2995,32 @@ function showBodyMap(mode, payload) {
           oz.connect(gz); gz.connect(audioCtx.destination); oz.start(); oz.stop(audioCtx.currentTime+2.5);
         }
 
-        // Echo the zone label
-        echoEl.textContent = ZONE_LABELS[lang][z.key];
+        // Echo: "grief · stomach" — the pairing is the insight
+        const zoneName = ZONE_LABELS[lang][z.key];
+        const shadowName = decStateName || '';
+        echoEl.textContent = shadowName ? `${shadowName} · ${zoneName}` : zoneName;
         const echoY = figY + z.labelY * figH - 24;
         echoEl.style.top = Math.max(120, Math.min(H - 100, echoY)) + 'px';
         echoEl.style.opacity = '1';
+
+        // Watermark brightens briefly then fades
+        watermarkEl.style.transition = 'opacity 0.4s ease';
+        watermarkEl.style.opacity = '0';
 
         // Hide question label
         qEl.style.transition = 'opacity 0.8s ease';
         qEl.style.opacity = '0';
 
-        // Somatic pause — 1.6s of the zone glowing, then transition
+        // Somatic pause — 2s of the zone glowing, then transition
         setTimeout(() => {
-          echoEl.style.transition = 'opacity 1s ease';
+          echoEl.style.transition = 'opacity 1.2s ease';
           echoEl.style.opacity = '0';
           setTimeout(() => {
             cancelAnimationFrame(figRafId);
             decBodySpot = z.key;
             startDecAcknowledge();
-          }, 600);
-        }, 1600);
+          }, 700);
+        }, 2000);
       });
       hitBtn.addEventListener('touchend', e => { e.preventDefault(); hitBtn.click(); });
 
