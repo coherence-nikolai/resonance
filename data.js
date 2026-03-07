@@ -1,11 +1,10 @@
 // ═══════════════════════════════════════
-// FIELD — Unified Data v1.0
+// FIELD — Unified Data v1.1
 // Three movements: Observe · Collapse · Decohere
 // ═══════════════════════════════════════
 
 const TRANSLATIONS = {
   en: {
-    // Welcome intro (first launch only)
     welcomeCard0Big: 'You exist in\n<b>superposition.</b>',
     welcomeCard0Small: 'Every version of you is real right now.\nCalm. Brave. Clear. Stuck. Afraid.\nAll equally present. None more true than another.',
     welcomeCard1Big: 'The state you <b>observe</b>\nbecomes the state you inhabit.',
@@ -15,7 +14,6 @@ const TRANSLATIONS = {
     wlcMvHints: ['train attention','choose a state','release what you carry'],
     wlcEnterBtn: 'enter the field',
     wlcTapHint: 'tap to continue',
-    // Field arrival
     fieldArrival: 'The field is open.',
     fieldSub: 'attention shapes the field',
     observeLabel: 'Observe',
@@ -24,8 +22,6 @@ const TRANSLATIONS = {
     observeHint: 'train attention',
     collapseHint: 'choose a state',
     decohereHint: 'release what you carry',
-
-    // Collapse
     fieldLine: 'These versions of you exist right now.',
     cLabel: 'You just collapsed upward ↑',
     cSub: 'The observer has spoken. The field has responded.',
@@ -42,8 +38,6 @@ const TRANSLATIONS = {
     breathInhale: 'inhale',
     breathHold: 'hold',
     breathEnd: s => `Your nervous system now knows the direction.\n<strong>${s}</strong> is encoded in you.\nKeep observing.`,
-
-    // Observer
     obsArrivalSub: 'One particle.\nNo instructions.\nJust watch.',
     obsHint: 'tap to begin',
     obsScatter: 'the field reforms — begin again',
@@ -54,8 +48,6 @@ const TRANSLATIONS = {
     obsStillSub: 'You held it.\nThe particle knows.',
     obsStillTap: 'tap to return to field',
     obsTrainHint: 'Train the attention that makes collapse possible.\nEvery tap scatters. Every second clarifies.',
-
-    // Decohere
     decArrivalLine: 'What are you carrying right now?',
     decArrivalSub: 'Choose what wants to be released.',
     decInhale: 'inhale · and once more',
@@ -66,7 +58,6 @@ const TRANSLATIONS = {
     decAgainBtn: 'release another',
   },
   es: {
-    // Welcome intro (first launch only)
     welcomeCard0Big: 'Existes en\n<b>superposición.</b>',
     welcomeCard0Small: 'Cada versión tuya es real ahora mismo.\nSereno. Valiente. Claro. Bloqueado. Asustado.\nTodas igualmente presentes. Ninguna más verdadera que otra.',
     welcomeCard1Big: 'El estado que <b>observas</b>\nes el estado que habitas.',
@@ -76,7 +67,6 @@ const TRANSLATIONS = {
     wlcMvHints: ['entrenar la atención','elegir un estado','soltar lo que cargas'],
     wlcEnterBtn: 'entrar al campo',
     wlcTapHint: 'toca para continuar',
-    // Field arrival
     fieldArrival: 'El campo está abierto.',
     fieldSub: 'la atención moldea el campo',
     observeLabel: 'Observar',
@@ -85,8 +75,6 @@ const TRANSLATIONS = {
     observeHint: 'entrenar la atención',
     collapseHint: 'elegir un estado',
     decohereHint: 'soltar lo que cargas',
-
-    // Collapse
     fieldLine: 'Estas versiones tuyas existen ahora mismo.',
     cLabel: 'Acabas de colapsar hacia arriba ↑',
     cSub: 'El observador ha hablado. El campo ha respondido.',
@@ -103,8 +91,6 @@ const TRANSLATIONS = {
     breathInhale: 'inhala',
     breathHold: 'sostén',
     breathEnd: s => `Tu sistema nervioso ahora conoce la dirección.\n<strong>${s}</strong> está codificado en ti.\nSigue observando.`,
-
-    // Observer
     obsArrivalSub: 'Una partícula.\nSin instrucciones.\nSolo observa.',
     obsHint: 'toca para comenzar',
     obsScatter: 'el campo se reforma — comienza de nuevo',
@@ -115,8 +101,6 @@ const TRANSLATIONS = {
     obsStillSub: 'Lo sostuviste.\nLa partícula lo sabe.',
     obsStillTap: 'toca para volver al campo',
     obsTrainHint: 'Entrena la atención que hace posible el colapso.\nCada toque dispersa. Cada segundo clarifica.',
-
-    // Decohere
     decArrivalLine: '¿Qué estás cargando ahora mismo?',
     decArrivalSub: 'Elige lo que quiere ser liberado.',
     decInhale: 'inhala · y una vez más',
