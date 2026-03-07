@@ -2901,14 +2901,10 @@ function showBodyMap(mode, payload) {
       { key:'stomach', labelY: 0.49 },
       { key:'pelvis',  labelY: 0.64 },
     ];
-    const ZONE_LABELS = {
-      en: { head:'head', throat:'throat', chest:'chest', stomach:'stomach', pelvis:'pelvis' },
-      es: { head:'cabeza', throat:'garganta', chest:'pecho', stomach:'vientre', pelvis:'pelvis' }
-    };
 
     let activeSpot = null;
     let glowPhase = 0;
-    let somatic = false; // true during somatic pause
+    let somatic = false;
     let figRafId = null;
 
     // Echo word shown on tap
