@@ -2821,14 +2821,82 @@ function startDecohere() {
 }
 
 function buildShadowGrid() {
-  const grid = document.getElementById('shadowGrid'); grid.innerHTML = '';
+  const grid = document.getElementById('shadowGrid');
+  grid.innerHTML = '';
+  grid.style.cssText = 'position:relative;width:100%;flex:1;min-height:0;';
+
   const en = SHADOW_STATES.en, es = SHADOW_STATES.es;
-  en.forEach((name,i) => {
-    const o = document.createElement('div'); o.className = 'shadow-orb';
-    o.style.setProperty('--shadow-dur', (3.5+Math.random()*3).toFixed(2)+'s');
-    o.style.animationDelay = (-Math.random()*4).toFixed(2)+'s';
-    o.textContent = lang==='en' ? name : es[i];
-    const go = () => { if(audioCtx) playTap(); decStateName=name; decStateNameES=es[i]; showDecBodyMap(); };
+
+  // Each word has a weight — heavier words are larger and lower, lighter ones drift higher
+  const WORD_WEIGHTS = {
+    Anxious: { size: 1.1, y: 0.28, x: 0.18 },
+    Heavy:   { size: 1.4, y: 0.55, x: 0.52 },
+    Stuck:   { size: 1.0, y: 0.42, x: 0.25 },
+    Numb:    { size: 0.75, y: 0.18, x: 0.60 },
+    Scattered: { size: 0.9, y: 0.12, x: 0.22 },
+    Angry:   { size: 1.25, y: 0.38, x: 0.55 },
+    Tired:   { size: 1.15, y: 0.68, x: 0.15 },
+    Overwhelmed: { size: 1.5, y: 0.72, x: 0.38 },
+    Disconnected:{ size: 0.85, y: 0.22, x: 0.42 },
+    Afraid:  { size: 1.0, y: 0.58, x: 0.62 },
+  };
+
+  // Container fades in after arrival text reads
+  grid.style.opacity = '0';
+  grid.style.transition = 'opacity 1.2s ease';
+  setTimeout(() => { grid.style.opacity = '1'; }, 800);
+
+  en.forEach((name, i) => {
+    const displayName = lang === 'en' ? name : es[i];
+    const w = WORD_WEIGHTS[name] || { size: 1.0, y: 0.5, x: 0.5 };
+
+    const o = document.createElement('button');
+    o.className = 'shadow-orb';
+
+    // Size: base 28px scaled by weight
+    const baseSize = Math.round(28 + w.size * 16);
+    const maxSize  = Math.round(baseSize * 1.4);
+    o.style.cssText = `
+      position:absolute;
+      font-size:clamp(${baseSize}px,${(w.size * 6.5).toFixed(1)}vw,${maxSize}px);
+      opacity:0;
+      left:${(w.x * 100).toFixed(1)}%;
+      top:${(w.y * 100).toFixed(1)}%;
+      transform:translate(-50%,-50%);
+      animation:none;
+    `;
+
+    // Stagger fade-in — heavier words come in slightly slower
+    const delay = 200 + i * 120 + Math.random() * 200;
+    setTimeout(() => {
+      o.style.transition = 'opacity 1.4s ease, color .3s ease, text-shadow .3s ease';
+      o.style.opacity = (0.65 + w.size * 0.15).toFixed(2);
+      // Gentle float animation per word
+      const dur = (4 + w.size * 2 + Math.random() * 2).toFixed(2);
+      const yAmp = (2 + w.size * 1.5).toFixed(1);
+      o.style.animation = `shadowWordFloat${i} ${dur}s ease-in-out infinite`;
+      // Inject keyframe
+      const kf = document.createElement('style');
+      kf.textContent = `@keyframes shadowWordFloat${i} {
+        0%,100%{transform:translate(-50%,-50%) translateY(0px);}
+        50%{transform:translate(-50%,-50%) translateY(-${yAmp}px);}
+      }`;
+      document.head.appendChild(kf);
+    }, delay);
+
+    o.textContent = displayName;
+
+    const go = () => {
+      if (audioCtx) playTap();
+      decStateName = name; decStateNameES = es[i];
+      // Selection: chosen word pulses bright, others fade
+      grid.querySelectorAll('.shadow-orb').forEach(el => {
+        el.style.transition = 'opacity 0.6s ease, color 0.6s ease';
+        el.style.opacity = el === o ? '1' : '0.08';
+        el.style.color = el === o ? 'rgba(255,160,140,1)' : '';
+      });
+      setTimeout(() => showDecBodyMap(), 700);
+    };
     o.addEventListener('click', go);
     o.addEventListener('touchend', e => { e.preventDefault(); go(); });
     grid.appendChild(o);
@@ -3162,7 +3230,13 @@ function showBodyMap(mode, payload) {
           setTimeout(() => {
             cancelAnimationFrame(figRafId);
             decBodySpot = z.key;
-            startDecAcknowledge();
+            // If API key exists — enter dissolution chamber first
+            const apiKey = localStorage.getItem('field_api_key');
+            if (apiKey) {
+              startDissolutionChamber();
+            } else {
+              startDecAcknowledge();
+            }
           }, 700);
         }, 2000);
       });
@@ -3308,17 +3382,61 @@ function startDecAcknowledge() {
     bp.style.opacity = '0';
   }
 
+  // Ensure back button stays visible
+  showBackBtn();
+  document.getElementById('backBtn').onclick = () => startDecohere();
+
   showScreen('s-dec-breath', () => {
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      wordEl.style.transition = 'color 3s ease, opacity 2s ease';
-      ackLayer.style.transition = 'opacity 1s ease';
+      wordEl.style.transition = 'color 3s ease, opacity 2.5s ease';
+      ackLayer.style.transition = 'opacity 1.2s ease';
+
+      // Word fades in slowly
       setTimeout(() => {
         wordEl.style.opacity = '1';
-        wordEl.style.textShadow = '0 0 36px rgba(240,220,180,.28)';
-      }, 100);
-      setTimeout(() => { ackLayer.style.opacity = '1'; }, 200);
-      // 5s of silence — then breath begins
-      setTimeout(() => startDecBreath(displayName), 5000);
+        wordEl.style.textShadow = '0 0 48px rgba(240,220,180,.35)';
+      }, 300);
+      setTimeout(() => { ackLayer.style.opacity = '1'; }, 400);
+
+      // "just this" whisper appears at 3s
+      let justThisEl = document.createElement('div');
+      justThisEl.style.cssText = `position:fixed;bottom:clamp(100px,20vh,140px);left:50%;
+        transform:translateX(-50%);font-size:clamp(13px,3.2vw,16px);letter-spacing:.28em;
+        color:rgba(240,230,208,.0);font-weight:300;font-family:'Plus Jakarta Sans',sans-serif;
+        text-transform:lowercase;pointer-events:none;z-index:52;
+        transition:color 2s ease;white-space:nowrap;`;
+      justThisEl.textContent = lang === 'en' ? 'just this' : 'solo esto';
+      document.body.appendChild(justThisEl);
+      setTimeout(() => { justThisEl.style.color = 'rgba(240,230,208,.28)'; }, 3000);
+
+      // "when ready, breathe" hint — tap to begin early
+      let readyEl = document.createElement('div');
+      readyEl.style.cssText = `position:fixed;bottom:clamp(60px,12vh,90px);left:50%;
+        transform:translateX(-50%);font-size:clamp(12px,3vw,14px);letter-spacing:.18em;
+        color:rgba(240,230,208,.0);font-weight:300;font-family:'Plus Jakarta Sans',sans-serif;
+        text-transform:lowercase;cursor:pointer;z-index:52;padding:12px 24px;
+        transition:color 2s ease;white-space:nowrap;-webkit-tap-highlight-color:transparent;`;
+      readyEl.textContent = lang === 'en' ? 'when ready · breathe' : 'cuando estés listo · respira';
+      document.body.appendChild(readyEl);
+      setTimeout(() => { readyEl.style.color = 'rgba(240,230,208,.22)'; }, 5000);
+
+      let breathStarted = false;
+      const beginBreath = () => {
+        if (breathStarted) return;
+        breathStarted = true;
+        justThisEl.style.color = 'rgba(240,230,208,.0)';
+        readyEl.style.color = 'rgba(240,230,208,.0)';
+        setTimeout(() => { justThisEl.remove(); readyEl.remove(); }, 2100);
+        startDecBreath(displayName);
+      };
+
+      readyEl.addEventListener('click', beginBreath);
+      readyEl.addEventListener('touchend', e => { e.preventDefault(); beginBreath(); });
+
+      // Auto-start at 10s if user hasn't tapped
+      const autoTimer = setTimeout(beginBreath, 10000);
+      // Clean up if navigated away
+      readyEl._autoTimer = autoTimer;
     }));
   });
 }
@@ -3525,6 +3643,184 @@ function startDecBreath(displayName) {
   }
 
   dDelay(runCycle, 800);
+}
+
+// ══════════════════════════════════════
+// DISSOLUTION CHAMBER — AI-assisted witnessing
+// Slots between body map and breath
+// 3 Socratic exchanges max, field-language, sparse
+// ══════════════════════════════════════
+let chamberExchanges = 0;
+let chamberHistory = [];
+let chamberTyping = false;
+
+const CHAMBER_SYSTEM = `You are a dissolution chamber — the last door before silence.
+
+The person has just named a shadow state (like "Anxious" or "Heavy") and located it in their body. They are about to enter a breath practice. Your role is to help them be with it, not to fix it.
+
+Rules:
+- Maximum 3 exchanges. After the 3rd user message, end with a single closing line and nothing more.
+- Ask only one question per response. Never two.
+- Speak in field-language: body, presence, sensation, location, quality. Not psychology or advice.
+- Be sparse. One to three sentences maximum per response.
+- Do not reassure. Do not explain. Do not interpret.
+- If they say something, reflect it back as sensation or location, then ask what's true about it right now.
+- Your first question opens toward the body. Example: "Where in [zone] does it live most precisely?"
+- Never use the words: heal, release, let go, process, trauma, therapy, anxiety, cope.
+- You are holding space, not guiding them anywhere.
+- After 3 exchanges, your final message ends with a closing line like: "That's enough to carry into the breath." or "The breath can hold the rest."`;
+
+function startDissolutionChamber() {
+  currentMode = 'witness';
+  chamberExchanges = 0;
+  chamberHistory = [];
+  chamberTyping = false;
+
+  const shadowDisplay = lang === 'en' ? decStateName : decStateNameES;
+  const zoneDisplay   = decBodySpot || 'body';
+  const contextLabel  = `${shadowDisplay.toLowerCase()} · ${zoneDisplay}`;
+
+  showBackBtn();
+  document.getElementById('backBtn').onclick = () => startDecohere();
+
+  showScreen('s-chamber', () => {
+    const ctx    = document.getElementById('chamber-context');
+    const msgs   = document.getElementById('chamber-messages');
+    const inputW = document.getElementById('chamber-input-wrap');
+    const input  = document.getElementById('chamber-input');
+    const send   = document.getElementById('chamber-send');
+    const skip   = document.getElementById('chamber-skip');
+
+    msgs.innerHTML = '';
+    input.value = '';
+
+    // Context label fades in
+    ctx.textContent = contextLabel;
+    setTimeout(() => { ctx.style.opacity = '1'; }, 400);
+
+    // Skip always available
+    setTimeout(() => { skip.style.opacity = '1'; }, 1200);
+    const doSkip = () => { startDecAcknowledge(); };
+    skip.addEventListener('click', doSkip);
+    skip.addEventListener('touchend', e => { e.preventDefault(); doSkip(); });
+
+    // First AI question — no user message needed
+    const firstUserCtx = lang === 'en'
+      ? `I named "${decStateName}" and felt it in my ${zoneDisplay}.`
+      : `Nombré "${decStateNameES}" y lo sentí en mi ${zoneDisplay}.`;
+
+    chamberHistory = [{ role: 'user', content: firstUserCtx }];
+
+    // Small delay then first AI message appears
+    setTimeout(() => {
+      chamberCallAI(() => {
+        // After first AI message, show input
+        setTimeout(() => { inputW.style.opacity = '1'; input.focus(); }, 600);
+      });
+    }, 1400);
+
+    // Auto-grow textarea
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 80) + 'px';
+    });
+
+    const doSend = () => {
+      const text = input.value.trim();
+      if (!text || chamberTyping) return;
+      input.value = '';
+      input.style.height = 'auto';
+      appendChamberMsg(text, 'user');
+      chamberHistory.push({ role: 'assistant', content: chamberLastAI });
+      chamberHistory.push({ role: 'user', content: text });
+      chamberExchanges++;
+
+      if (chamberExchanges >= 3) {
+        // Final exchange — AI closes, then auto-advance
+        chamberCallAI(() => {
+          inputW.style.opacity = '0';
+          inputW.style.pointerEvents = 'none';
+          skip.textContent = lang === 'en' ? 'enter the breath →' : 'entrar en la respiración →';
+          skip.style.color = 'rgba(240,230,208,.38)';
+          setTimeout(() => startDecAcknowledge(), 5000);
+        });
+      } else {
+        chamberCallAI(null);
+      }
+    };
+
+    send.addEventListener('click', doSend);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+    });
+  });
+}
+
+let chamberLastAI = '';
+
+function appendChamberMsg(text, role) {
+  const msgs = document.getElementById('chamber-messages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  div.className = `chamber-msg ${role}`;
+  div.textContent = text;
+  msgs.appendChild(div);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    div.style.opacity = '1';
+    msgs.scrollTop = msgs.scrollHeight;
+  }));
+}
+
+async function chamberCallAI(onDone) {
+  const apiKey = localStorage.getItem('field_api_key');
+  if (!apiKey) { startDecAcknowledge(); return; }
+
+  chamberTyping = true;
+
+  // Typing indicator
+  const msgs = document.getElementById('chamber-messages');
+  const dot = document.createElement('div');
+  dot.className = 'chamber-msg ai';
+  dot.style.opacity = '0.35';
+  dot.textContent = '·  ·  ·';
+  if (msgs) { msgs.appendChild(dot); msgs.scrollTop = msgs.scrollHeight; }
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 180,
+        system: CHAMBER_SYSTEM,
+        messages: chamberHistory
+      })
+    });
+
+    const data = await res.json();
+    if (dot.parentNode) dot.parentNode.removeChild(dot);
+
+    if (data.content && data.content[0]) {
+      const text = data.content[0].text.trim();
+      chamberLastAI = text;
+      appendChamberMsg(text, 'ai');
+      chamberTyping = false;
+      if (onDone) onDone();
+    } else {
+      // API error — skip silently to acknowledge
+      chamberTyping = false;
+      startDecAcknowledge();
+    }
+  } catch (err) {
+    if (dot.parentNode) dot.parentNode.removeChild(dot);
+    chamberTyping = false;
+    startDecAcknowledge();
+  }
 }
 
 // PHASE 3: End
