@@ -187,7 +187,7 @@ class ObsParticle {
     this.ph = Math.random()*Math.PI*2;
     this.phV = 0.004 + Math.random()*0.003;
     this.driftR = 55 + Math.random()*35;
-    this.r = 5; this.alpha = 0; this.targetAlpha = 0.9;
+    this.r = 15; this.alpha = 0; this.targetAlpha = 0.9;
     this.breathPh = 0;
     this.scattering = false; this.scatterParts = [];
   }
@@ -206,8 +206,8 @@ class ObsParticle {
     const breathFactor = 0.7 + 0.3*Math.sin(this.breathPh);
     const stillFactor = isStill ? 1 : 0.4;
     const blur = (1-clarityLevel)*12;
-    const r = this.r + clarityLevel*2;
-    const glow = (18 + clarityLevel*40) * breathFactor;
+    const r = this.r + clarityLevel*6;
+    const glow = (55 + clarityLevel*90) * breathFactor;
     const ga = (0.15 + clarityLevel*0.35) * stillFactor;
     cx.save();
     if (blur > 0.5) cx.filter = `blur(${blur.toFixed(1)}px)`;
@@ -423,6 +423,48 @@ function playScatterSound() {
   src.connect(g); g.connect(audioCtx.destination); src.start();
 }
 
+// ── MOVEMENT AUDIO SIGNATURES ──
+function playObserveSignature() {
+  if (!audioCtx) return;
+  // Open, spacious — ascending soft tones, attention settling
+  [432, 540, 648].forEach((f, i) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    const t0 = audioCtx.currentTime + i * 0.3;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.038 - i*0.008, t0 + 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 3.5);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 4);
+  });
+}
+function playCollapseSignature() {
+  if (!audioCtx) return;
+  // Decisive, crystallising — single sharp tone that narrows and holds
+  const freqs = [528, 264];
+  freqs.forEach((f, i) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = i === 0 ? 'sine' : 'triangle'; o.frequency.value = f;
+    const t0 = audioCtx.currentTime + i * 0.08;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.06 - i*0.02, t0 + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.5);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 3);
+  });
+}
+function playDecohereSignature() {
+  if (!audioCtx) return;
+  // Lower, dissolving, releasing downward
+  [288, 192, 144].forEach((f, i) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    const t0 = audioCtx.currentTime + i * 0.25;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.042 - i*0.01, t0 + 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 4.5);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 5);
+  });
+}
+
 // ── SCREEN TRANSITIONS ──
 function showScreen(id, postCb) {
   const gh = document.getElementById('ghosts');
@@ -436,16 +478,8 @@ function showScreen(id, postCb) {
   const next = document.getElementById(id);
   const current = document.querySelector('.screen.active');
   if (current === next) { if (postCb) postCb(); return; }
-  if (current) {
-    current.style.transition = 'opacity 0.7s ease';
-    current.style.opacity = '0';
-    setTimeout(() => {
-      current.classList.remove('active');
-      current.style.opacity = '';
-      current.style.transition = '';
-    }, 720);
-  }
-  setTimeout(() => {
+
+  const showNext = () => {
     next.style.opacity = '0';
     next.style.transition = 'none';
     next.classList.add('active');
@@ -458,10 +492,33 @@ function showScreen(id, postCb) {
         if (postCb) postCb();
       }, 820);
     }));
-  }, 400);
+  };
+
+  if (current) {
+    current.style.transition = 'opacity 0.65s ease';
+    current.style.opacity = '0';
+    setTimeout(() => {
+      current.classList.remove('active');
+      current.style.opacity = '';
+      current.style.transition = '';
+      // Small gap then show next — no overlap
+      setTimeout(showNext, 40);
+    }, 660);
+  } else {
+    showNext();
+  }
 }
 
 // ── SETTINGS PANEL ──
+function toggleSettings() {
+  const panel = document.getElementById('settings-panel');
+  if (!panel) return;
+  if (panel.classList.contains('open')) {
+    closeSettings();
+  } else {
+    openSettings();
+  }
+}
 function openSettings() {
   const panel = document.getElementById('settings-panel');
   if (!panel) return;
@@ -718,6 +775,14 @@ function buildObsScreen() {
       b.addEventListener('click', () => chooseNoteTone(tone.key, b));
       toneRow.appendChild(b);
     });
+
+    // Storm mode entry — subtle link at bottom
+    const stormLink = document.createElement('div');
+    stormLink.style.cssText = 'margin-top:24px;font-size:clamp(11px,2.8vw,13px);letter-spacing:.18em;color:rgba(240,204,136,.25);cursor:pointer;padding:8px 0;';
+    stormLink.textContent = lang === 'en' ? 'enter storm' : 'entrar tormenta';
+    stormLink.addEventListener('click', () => { clearObserver(); startStormScreen(); });
+    stormLink.addEventListener('touchend', e => { e.preventDefault(); clearObserver(); startStormScreen(); });
+    document.querySelector('.observe-alt-wrap').appendChild(stormLink);
     return;
   }
 
@@ -825,9 +890,10 @@ function startObserve() {
   if (navigator.vibrate) navigator.vibrate(18);
   currentMode = 'observe';
   showBackBtn();
-  // BUG FIX: ensure back button stays visible and goes home
   document.getElementById('backBtn').onclick = () => goHome();
   initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+  playObserveSignature();
   const ring = document.getElementById('clarity-ring');
   if (ring) ring.style.display = 'block';
   isCoherent = false; fieldActive = false; attentionSec = 0;
@@ -1011,6 +1077,9 @@ function enterObserve() {
   initAudio();
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
   fadeDrone(true, 1); spParticles = [];
+  // Back button visible immediately — never hidden during observe
+  showBackBtn();
+  document.getElementById('backBtn').onclick = () => goHome();
   const setup = document.getElementById('obs-setup');
   if (setup) { setup.style.transition = 'opacity 0.8s ease'; setup.style.opacity = '0'; }
 
@@ -1029,7 +1098,7 @@ function enterObserve() {
     // Subtle observe drone
     if (audioCtx && !droneNodes.length && currentMode === 'observe') {
       try {
-        [40,80,120].forEach((f,i) => {
+        [180, 360, 270].forEach((f,i) => {
           const o = audioCtx.createOscillator(), g = audioCtx.createGain();
           o.type = 'sine'; o.frequency.value = f;
           g.gain.setValueAtTime(0, audioCtx.currentTime);
@@ -1333,6 +1402,9 @@ document.getElementById('s-observe').addEventListener('touchend', e => {
 let stepIndex = 0;
 function startCollapse() {
   if (navigator.vibrate) navigator.vibrate(18);
+  initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+  playCollapseSignature();
   currentMode = 'collapse'; showBackBtn();
   spParticles = []; fadeDrone(true, 1);
   const visited = localStorage.getItem('field_visited');
@@ -1539,14 +1611,39 @@ function clearAllBreath(){ breathTimers.forEach(clearTimeout); breathTimers=[]; 
 function startBreath() {
   clearAllBreath(); breathRunning=true; breathCycle=0;
   const stateName=curStateName, t=TRANSLATIONS[lang];
-  spParticles.forEach(sp => { sp.targetAlpha = 0; });
   const p=document.getElementById('bp'), ripple=document.getElementById('bripple');
   const btext=document.getElementById('btext');
   p.className='bp neutral';
+  p.style.opacity = '0';
   btext.style.transition='none'; btext.style.opacity='0';
   btext.textContent=''; btext.className='btext';
   ripple.classList.remove('expand');
   [0,1,2].forEach(i=>{ const d=document.getElementById('bdot'+i); if(d) d.classList.remove('done'); });
+
+  // ── Particle migration: chosen sp flies to breath circle centre ──
+  const chosen = spParticles[spChosen % Math.max(spParticles.length, 1)];
+  if (chosen) {
+    // Fade all others out quickly
+    spParticles.forEach((sp, i) => {
+      if (i !== spChosen % spParticles.length) sp.targetAlpha = 0;
+    });
+    // Animate chosen toward screen centre (where #bp lives)
+    chosen.targetCx = 0.5;
+    chosen.targetCy = 0.5;
+    chosen.phV = 0; // stop orbital drift
+    chosen.driftR = 0;
+    // After particle reaches centre (~1.8s), cross-fade into bp
+    bDelay(() => {
+      chosen.targetAlpha = 0;
+      p.style.transition = 'opacity 1.2s ease';
+      p.style.opacity = '1';
+    }, 1800);
+  } else {
+    // No particle — just show bp directly
+    p.style.transition = 'opacity 1s ease';
+    p.style.opacity = '1';
+  }
+
   function showText(text,cls,delayMs){
     bDelay(()=>{
       const isVisible = parseFloat(btext.style.opacity||'0') > 0.05;
@@ -1609,8 +1706,158 @@ function goStill() {
 }
 
 // ══════════════════════════════════════
-// DECOHERE MOVEMENT
+// STORM SCREEN
 // ══════════════════════════════════════
+const DHAMMA_WORDS = {
+  en: ['arising','passing','empty','changing','not self','conditioned','just this',
+       'appearing','dissolving','fabricated','contact','known','impermanent',
+       'without centre','already gone','fading','here','gone','felt','noted'],
+  es: ['surgiendo','pasando','vacío','cambiando','no yo','condicionado','solo esto',
+       'apareciendo','disolviéndose','fabricado','contacto','conocido','impermanente',
+       'sin centro','ya se fue','desvaneciendo','aquí','ido','sentido','notado']
+};
+
+let stormScreenTimer = null;
+let stormScreenRafId = null;
+let stormActiveWords = []; // {el, x, y, vx, vy, alpha, targetAlpha, size, phase}
+
+function startStormScreen() {
+  currentMode = 'storm';
+  showBackBtn();
+  document.getElementById('backBtn').onclick = () => exitStormScreen();
+  showScreen('s-storm', () => {
+    // Background superposition particles for collapse effect
+    if (spParticles.length === 0) initSpParticles(10);
+    spParticles.forEach(p => { p.targetAlpha = 0.12 + Math.random()*0.1; p.targetClarity = 0; });
+    initStormWords();
+  });
+  // Dim background, keep particles alive
+  bgDimTarget = 0.25;
+  fadeDrone(true, 2);
+}
+
+function exitStormScreen() {
+  stopStormWords();
+  bgDimTarget = 1;
+  currentMode = 'observe';
+  goHome();
+}
+
+function initStormWords() {
+  const layer = document.getElementById('storm-words-layer');
+  if (!layer) return;
+  layer.innerHTML = '';
+  stormActiveWords = [];
+  stopStormWords();
+
+  // Spawn words on interval
+  let spawnDelay = 0;
+  const spawnNext = () => {
+    if (currentMode !== 'storm') return;
+    spawnStormWord();
+    const next = 2200 + Math.random() * 1800;
+    stormScreenTimer = setTimeout(spawnNext, next);
+  };
+  // Seed 2 words immediately, then auto-spawn
+  spawnStormWord(); spawnStormWord();
+  stormScreenTimer = setTimeout(spawnNext, 2500);
+
+  // Animation loop
+  const animateStorm = () => {
+    if (currentMode !== 'storm') return;
+    stormActiveWords = stormActiveWords.filter(w => {
+      w.phase += 0.008;
+      w.alpha += (w.targetAlpha - w.alpha) * 0.04;
+      w.x += w.vx;
+      w.y += w.vy;
+      // Apply drift
+      const a = w.alpha.toFixed(3);
+      w.el.style.color = `rgba(240,204,136,${a})`;
+      w.el.style.left = w.x + 'px';
+      w.el.style.top = w.y + 'px';
+      // Fade out if alpha near zero and target is 0
+      if (w.targetAlpha === 0 && w.alpha < 0.01) {
+        w.el.remove();
+        return false;
+      }
+      // Auto-fade after hold
+      if (!w.fading && Date.now() - w.born > w.holdMs) {
+        w.fading = true;
+        w.targetAlpha = 0;
+      }
+      return true;
+    });
+    stormScreenRafId = requestAnimationFrame(animateStorm);
+  };
+  stormScreenRafId = requestAnimationFrame(animateStorm);
+
+  // Occasional background particle collapses
+  const collapseLoop = () => {
+    if (currentMode !== 'storm') return;
+    if (spParticles.length > 0) {
+      const sp = spParticles[Math.floor(Math.random() * spParticles.length)];
+      const origAlpha = sp.targetAlpha;
+      sp.targetClarity = 0.8 + Math.random() * 0.2;
+      sp.targetAlpha = 0.9;
+      setTimeout(() => {
+        sp.targetClarity = 0;
+        sp.targetAlpha = origAlpha;
+      }, 900 + Math.random() * 600);
+    }
+    setTimeout(collapseLoop, 3000 + Math.random() * 4000);
+  };
+  setTimeout(collapseLoop, 2000);
+}
+
+function spawnStormWord() {
+  const layer = document.getElementById('storm-words-layer');
+  if (!layer || stormActiveWords.length > 5) return;
+  const words = DHAMMA_WORDS[lang];
+  const word = words[Math.floor(Math.random() * words.length)];
+  const el = document.createElement('div');
+  el.className = 'sw-word';
+  el.textContent = word;
+  const sizes = ['clamp(13px,3.5vw,18px)', 'clamp(16px,4.5vw,24px)', 'clamp(11px,2.8vw,15px)'];
+  el.style.fontSize = sizes[Math.floor(Math.random() * sizes.length)];
+
+  // Random position avoiding edges
+  const margin = 60;
+  const x = margin + Math.random() * (innerWidth - margin * 2 - 140);
+  const y = margin + Math.random() * (innerHeight - margin * 2 - 40);
+
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.color = 'rgba(240,204,136,0)';
+  layer.appendChild(el);
+
+  const speed = 0.08 + Math.random() * 0.12;
+  const angle = Math.random() * Math.PI * 2;
+  const maxAlpha = 0.25 + Math.random() * 0.45;
+
+  const wordObj = {
+    el, x, y,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed - 0.05, // slight upward drift
+    alpha: 0,
+    targetAlpha: maxAlpha,
+    phase: Math.random() * Math.PI * 2,
+    born: Date.now(),
+    holdMs: 2000 + Math.random() * 3000,
+    fading: false
+  };
+  stormActiveWords.push(wordObj);
+}
+
+function stopStormWords() {
+  if (stormScreenTimer) clearTimeout(stormScreenTimer);
+  stormScreenTimer = null;
+  if (stormScreenRafId) cancelAnimationFrame(stormScreenRafId);
+  stormScreenRafId = null;
+  stormActiveWords.forEach(w => w.el.remove());
+  stormActiveWords = [];
+  const layer = document.getElementById('storm-words-layer');
+  if (layer) layer.innerHTML = '';
+}
 
 // BUG FIX: dynamic body position calculation — safe across all screen sizes
 function getDecBodyPos(spot) {
@@ -1639,6 +1886,9 @@ function getDecBodyPos(spot) {
 
 function startDecohere() {
   if (navigator.vibrate) navigator.vibrate(18);
+  initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+  playDecohereSignature();
   currentMode = 'decohere'; showBackBtn();
   document.getElementById('backBtn').onclick = () => goHome();
   clearGhosts();
@@ -1681,23 +1931,117 @@ function showDecBodyMap() {
   if (line) line.textContent = lang === 'en' ? 'Where do you feel it most?' : '¿Dónde lo sientes más?';
   if (sub) sub.textContent = '';
   if (!grid) return;
-  grid.innerHTML = '<div class="bodymap-wrap"><div class="bodymap-line" id="bodyMapLine"></div></div>';
-  const lineEl = document.getElementById('bodyMapLine');
 
+  grid.innerHTML = '<div class="bodymap-wrap" id="bodymapWrap"></div>';
+  const wrap = document.getElementById('bodymapWrap');
+
+  // ── Particle silhouette canvas ──────────────────────────────────────────
+  const figDiv = document.createElement('div');
+  figDiv.className = 'bodymap-figure';
+  const fc = document.createElement('canvas');
+  fc.width = 180; fc.height = 520;
+  figDiv.appendChild(fc);
+  wrap.appendChild(figDiv);
+
+  const fx = fc.getContext('2d');
+
+  // Body landmark points (normalised 0-1 in 180×520 space)
+  // Each point: [x, y, r, glowR]
+  const W = 180, H = 520;
+  const BODY_PTS = [
+    // Head circle
+    ...(() => {
+      const pts = []; const cx=0.5, cy=0.09, rr=0.072;
+      for(let a=0;a<Math.PI*2;a+=Math.PI/8) pts.push([cx+Math.cos(a)*rr, cy+Math.sin(a)*rr*1.1, 1.2, 6]);
+      return pts;
+    })(),
+    // Neck
+    [0.5, 0.165, 1, 5],
+    // Shoulders
+    [0.26, 0.215, 1.3, 7], [0.38, 0.20, 1, 5], [0.5, 0.195, 0.9, 4],
+    [0.62, 0.20, 1, 5], [0.74, 0.215, 1.3, 7],
+    // Upper arms (left)
+    [0.21, 0.28, 1, 5], [0.18, 0.35, 1, 4], [0.16, 0.42, 1, 4],
+    // Upper arms (right)
+    [0.79, 0.28, 1, 5], [0.82, 0.35, 1, 4], [0.84, 0.42, 1, 4],
+    // Torso sides
+    [0.27, 0.26, 1, 4], [0.25, 0.34, 1, 4], [0.24, 0.42, 1, 4],
+    [0.73, 0.26, 1, 4], [0.75, 0.34, 1, 4], [0.76, 0.42, 1, 4],
+    // Chest centre
+    [0.5, 0.25, 1, 4], [0.42, 0.28, 0.8, 3], [0.58, 0.28, 0.8, 3],
+    // Waist
+    [0.30, 0.50, 1, 4], [0.38, 0.505, 0.8, 3], [0.5, 0.51, 0.9, 4],
+    [0.62, 0.505, 0.8, 3], [0.70, 0.50, 1, 4],
+    // Lower arms (left)
+    [0.14, 0.50, 1, 4], [0.12, 0.57, 1, 4],
+    // Lower arms (right)
+    [0.86, 0.50, 1, 4], [0.88, 0.57, 1, 4],
+    // Hips
+    [0.28, 0.595, 1.2, 6], [0.38, 0.60, 1, 4], [0.5, 0.605, 1, 4],
+    [0.62, 0.60, 1, 4], [0.72, 0.595, 1.2, 6],
+  ];
+
+  // Spot regions (% of canvas height) for glow mapping
+  const SPOT_BANDS = {
+    head:    [0.00, 0.20],
+    throat:  [0.14, 0.26],
+    chest:   [0.22, 0.44],
+    stomach: [0.42, 0.56],
+    pelvis:  [0.54, 0.70],
+  };
+
+  let activeSpot = null;
+  let glowPhase = 0;
+
+  function drawFigure() {
+    fx.clearRect(0, 0, W, H);
+    glowPhase += 0.03;
+
+    BODY_PTS.forEach(([nx, ny, r, gr]) => {
+      const px = nx * W, py = ny * H;
+      // Check if point is in active spot band
+      let inSpot = false;
+      if (activeSpot && SPOT_BANDS[activeSpot]) {
+        const [lo, hi] = SPOT_BANDS[activeSpot];
+        if (ny >= lo && ny <= hi) inSpot = true;
+      }
+      const pulse = inSpot ? 0.7 + 0.3 * Math.sin(glowPhase * 2) : 0.5 + 0.12 * Math.sin(glowPhase + nx * 3);
+      const alpha = inSpot ? 0.55 + 0.35 * pulse : 0.18 + 0.10 * pulse;
+      const glowA = inSpot ? 0.22 * pulse : 0.06 * pulse;
+      const glowRad = inSpot ? gr * 1.8 : gr;
+
+      // Glow
+      const grad = fx.createRadialGradient(px, py, 0, px, py, glowRad);
+      grad.addColorStop(0, `rgba(240,204,136,${glowA.toFixed(3)})`);
+      grad.addColorStop(1, 'rgba(240,204,136,0)');
+      fx.fillStyle = grad;
+      fx.beginPath(); fx.arc(px, py, glowRad, 0, Math.PI*2); fx.fill();
+
+      // Core dot
+      fx.globalAlpha = alpha;
+      fx.fillStyle = `rgba(240,210,140,1)`;
+      fx.beginPath(); fx.arc(px, py, r * (inSpot ? 1.5 : 1), 0, Math.PI*2); fx.fill();
+      fx.globalAlpha = 1;
+    });
+    requestAnimationFrame(drawFigure);
+  }
+  drawFigure();
+
+  // ── Body spot buttons (left side) ──────────────────────────────────────
   const BODY_SPOTS = {
     en: [
-      {key:'head',label:'head',top:12},
-      {key:'throat',label:'throat',top:30},
-      {key:'chest',label:'chest',top:48},
-      {key:'stomach',label:'stomach',top:66},
-      {key:'pelvis',label:'pelvis',top:84}
+      {key:'head',    label:'head',    top:9},
+      {key:'throat',  label:'throat',  top:22},
+      {key:'chest',   label:'chest',   top:36},
+      {key:'stomach', label:'stomach', top:52},
+      {key:'pelvis',  label:'pelvis',  top:66},
     ],
     es: [
-      {key:'head',label:'cabeza',top:12},
-      {key:'throat',label:'garganta',top:30},
-      {key:'chest',label:'pecho',top:48},
-      {key:'stomach',label:'vientre',top:66},
-      {key:'pelvis',label:'pelvis',top:84}
+      {key:'head',    label:'cabeza',   top:9},
+      {key:'throat',  label:'garganta', top:22},
+      {key:'chest',   label:'pecho',    top:36},
+      {key:'stomach', label:'vientre',  top:52},
+      {key:'pelvis',  label:'pelvis',   top:66},
     ]
   };
 
@@ -1711,11 +2055,12 @@ function showDecBodyMap() {
     b.style.transform = 'translateX(-50%) translateY(8px)';
     b.addEventListener('click', () => {
       decBodySpot = spot.key;
+      activeSpot = spot.key;
       document.querySelectorAll('.body-node').forEach(x => x.classList.remove('active'));
       b.classList.add('active');
-      setTimeout(() => startDecAcknowledge(), 160);
+      setTimeout(() => startDecAcknowledge(), 280);
     });
-    lineEl.appendChild(b);
+    wrap.appendChild(b);
     setTimeout(() => { b.style.opacity = '1'; b.style.transform = 'translateX(-50%) translateY(0)'; }, 120 * idx);
   });
 }
@@ -2032,6 +2377,116 @@ function clearAllDec() { decBreathTimers.forEach(clearTimeout); decBreathTimers 
 let wlcStep = 0;
 const WLC_TOTAL = 3;
 
+// ── LANDING PARTICLE SCREEN ──
+let landingRaf = null;
+let landingCollapsed = false;
+
+function startLandingScreen() {
+  document.getElementById('s-home').classList.remove('active');
+  document.getElementById('s-landing').classList.add('active');
+
+  const lcv = document.getElementById('landing-cv');
+  const lc = lcv.getContext('2d');
+  const hint = document.getElementById('landingHint');
+
+  function resizeLanding() {
+    lcv.width = innerWidth; lcv.height = innerHeight;
+  }
+  resizeLanding();
+  window.addEventListener('resize', resizeLanding);
+
+  let phase = 0;
+  let alpha = 0;
+  let collapsing = false;
+  let collapseProgress = 0;
+
+  // Show tap hint after 2s
+  setTimeout(() => {
+    hint.style.color = 'rgba(240,204,136,0.35)';
+  }, 2000);
+
+  function drawLanding() {
+    if (!document.getElementById('s-landing').classList.contains('active')) return;
+    lc.clearRect(0, 0, lcv.width, lcv.height);
+    phase += 0.012;
+    if (!collapsing) alpha = Math.min(alpha + 0.015, 1);
+
+    const cx = lcv.width / 2;
+    const cy = lcv.height / 2;
+    const breathFactor = 0.82 + 0.18 * Math.sin(phase);
+    const baseR = Math.min(lcv.width, lcv.height) * 0.32;
+
+    if (collapsing) {
+      collapseProgress += 0.04;
+      const t = Math.min(collapseProgress, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const r = baseR * breathFactor * (1 - eased * 0.85);
+      const ga = alpha * (1 - eased);
+
+      // Implosion glow
+      const glow = r * 2.5;
+      const g = lc.createRadialGradient(cx, cy, 0, cx, cy, glow);
+      g.addColorStop(0, `rgba(240,204,136,${(ga * 0.3).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(240,204,136,0)');
+      lc.fillStyle = g;
+      lc.beginPath(); lc.arc(cx, cy, glow, 0, Math.PI*2); lc.fill();
+
+      // Core
+      lc.globalAlpha = ga;
+      lc.fillStyle = `rgba(201,169,110,${ga.toFixed(3)})`;
+      lc.beginPath(); lc.arc(cx, cy, r, 0, Math.PI*2); lc.fill();
+      lc.globalAlpha = 1;
+
+      if (collapseProgress >= 1) {
+        // Done collapsing — go to welcome
+        window.removeEventListener('resize', resizeLanding);
+        cancelAnimationFrame(landingRaf);
+        localStorage.setItem('field_welcomed_landing', '1');
+        buildWelcome();
+        document.getElementById('s-landing').classList.remove('active');
+        document.getElementById('s-welcome').classList.add('active');
+        const w0 = document.getElementById('wlc0');
+        if (w0) { w0.style.opacity = '0'; w0.style.transition = 'none'; w0.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => { w0.style.transition = 'opacity 1.2s ease'; w0.style.opacity = '1'; })); }
+        return;
+      }
+    } else {
+      // Breathing glow
+      const glow = baseR * breathFactor * 2.2;
+      const g = lc.createRadialGradient(cx, cy, 0, cx, cy, glow);
+      g.addColorStop(0, `rgba(240,204,136,${(alpha * 0.18).toFixed(3)})`);
+      g.addColorStop(0.4, `rgba(240,204,136,${(alpha * 0.08).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(240,204,136,0)');
+      lc.fillStyle = g;
+      lc.beginPath(); lc.arc(cx, cy, glow, 0, Math.PI*2); lc.fill();
+
+      // Core particle
+      const r = baseR * breathFactor;
+      lc.globalAlpha = alpha * 0.55;
+      lc.fillStyle = 'rgba(201,169,110,1)';
+      lc.beginPath(); lc.arc(cx, cy, r, 0, Math.PI*2); lc.fill();
+      lc.globalAlpha = 1;
+    }
+    landingRaf = requestAnimationFrame(drawLanding);
+  }
+  landingRaf = requestAnimationFrame(drawLanding);
+
+  function onTap(e) {
+    if (collapsing) return;
+    collapsing = true;
+    hint.style.color = 'rgba(240,204,136,0)';
+    // Haptic
+    if (navigator.vibrate) navigator.vibrate(30);
+    // Play collapse signature
+    initAudio();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+    playCollapseSignature();
+    document.getElementById('s-landing').removeEventListener('click', onTap);
+    document.getElementById('s-landing').removeEventListener('touchend', onTap);
+  }
+  document.getElementById('s-landing').addEventListener('click', onTap);
+  document.getElementById('s-landing').addEventListener('touchend', e => { e.preventDefault(); onTap(e); });
+}
+
 function buildWelcome() {
   const t = TRANSLATIONS[lang];
   document.getElementById('wlc0-big').innerHTML = t.welcomeCard0Big.replace(/\n/g,'<br>');
@@ -2093,13 +2548,9 @@ document.getElementById('wlcEnterBtn').addEventListener('click', e => {
 applyLang();
 if (fontLarge) document.body.classList.add('fs-large');
 
-// First launch: show welcome
+// First launch: show landing particle, then welcome cards
 if (!localStorage.getItem('field_welcomed')) {
-  buildWelcome();
-  document.getElementById('s-home').classList.remove('active');
-  document.getElementById('s-welcome').classList.add('active');
-  // BUG FIX: don't double-init particles on first launch
-  // particles init in enterFromWelcome, not here
+  startLandingScreen();
 } else {
   initSpParticles(12);
   tryDrone();
