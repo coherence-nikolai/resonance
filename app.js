@@ -489,10 +489,45 @@ function playToneUnpleasant() {
     o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 1.8);
   });
 }
-function playToneNeutral() {
+function playTap() {
   if (!audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = 'sine'; o.frequency.value = 396;
+  o.type = 'sine'; o.frequency.value = 880;
+  g.gain.setValueAtTime(0, audioCtx.currentTime);
+  g.gain.linearRampToValueAtTime(0.022, audioCtx.currentTime + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.18);
+  o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 0.22);
+}
+const SENSE_FREQS = { seeing: 1320, hearing: 880, body: 528, mind: 660, taste: 440, smell: 396 };
+function playNoteSense(key) {
+  if (!audioCtx) return;
+  const freq = SENSE_FREQS[key] || 660;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0, audioCtx.currentTime);
+  g.gain.linearRampToValueAtTime(0.045, audioCtx.currentTime + 0.06);
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.0);
+  o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 1.2);
+  // soft harmonic
+  const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
+  o2.type = 'sine'; o2.frequency.value = freq * 2;
+  g2.gain.setValueAtTime(0, audioCtx.currentTime + 0.05);
+  g2.gain.linearRampToValueAtTime(0.018, audioCtx.currentTime + 0.12);
+  g2.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.4);
+  o2.connect(g2); g2.connect(audioCtx.destination); o2.start(audioCtx.currentTime + 0.05); o2.stop(audioCtx.currentTime + 1.6);
+}
+function playBackNav() {
+  if (!audioCtx) return;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(440, audioCtx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.4);
+  g.gain.setValueAtTime(0, audioCtx.currentTime);
+  g.gain.linearRampToValueAtTime(0.03, audioCtx.currentTime + 0.05);
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
+  o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 0.7);
+}
+function playToneNeutral() {
+  if (!audioCtx) return;
   g.gain.setValueAtTime(0, audioCtx.currentTime);
   g.gain.linearRampToValueAtTime(0.04, audioCtx.currentTime + 0.12);
   g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 2.2);
@@ -816,7 +851,7 @@ function showBackBtn() {
   const btn = document.getElementById('backBtn');
   btn.style.opacity = '1';
   btn.style.pointerEvents = 'all';
-  btn.onclick = () => goHome();
+  btn.onclick = () => { if(audioCtx) playBackNav(); goHome(); };
 }
 
 // ══════════════════════════════════════
@@ -867,7 +902,7 @@ function buildObsScreen() {
       <div class="observe-alt-wrap">
         <div class="observe-alt-title">${t?'noting':'notar'}</div>
         <div id="obs-timer-noting" style="font-size:clamp(14px,3.5vw,17px);letter-spacing:.14em;
-          color:rgba(201,169,110,.30);font-weight:300;min-height:22px;"></div>
+          color:rgba(201,169,110,.62);font-weight:300;min-height:22px;"></div>
         <div id="stormWord" class="storm-word"></div>
         <div id="noteCounter" class="note-counter">${t?'notes':'notas'} · 0</div>
         <div id="senseRow" class="sense-row"></div>
@@ -905,10 +940,10 @@ function buildObsScreen() {
     });
 
     const stormLink = document.createElement('div');
-    stormLink.style.cssText = 'margin-top:24px;font-size:clamp(11px,2.8vw,13px);letter-spacing:.18em;color:rgba(240,204,136,.25);cursor:pointer;padding:8px 0;';
+    stormLink.style.cssText = 'margin-top:24px;font-size:clamp(11px,2.8vw,13px);letter-spacing:.18em;color:rgba(240,204,136,.58);cursor:pointer;padding:8px 0;';
     stormLink.textContent = lang === 'en' ? 'enter storm' : 'entrar tormenta';
-    stormLink.addEventListener('click', () => { clearObserver(); startStormScreen(); });
-    stormLink.addEventListener('touchend', e => { e.preventDefault(); clearObserver(); startStormScreen(); });
+    stormLink.addEventListener('click', () => { if(audioCtx) playTap(); clearObserver(); startStormScreen(); });
+    stormLink.addEventListener('touchend', e => { e.preventDefault(); if(audioCtx) playTap(); clearObserver(); startStormScreen(); });
 
     // Voice noting button — only if Web Speech API available
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -926,13 +961,13 @@ function buildObsScreen() {
 
       const voiceLabel = document.createElement('div');
       voiceLabel.id = 'voice-label';
-      voiceLabel.style.cssText = 'font-size:clamp(10px,2.5vw,12px);letter-spacing:.14em;color:rgba(201,169,110,.28);';
+      voiceLabel.style.cssText = 'font-size:clamp(10px,2.5vw,12px);letter-spacing:.14em;color:rgba(201,169,110,.60);';
       voiceLabel.textContent = t ? 'voice' : 'voz';
 
       const voiceTranscriptEl = document.createElement('div');
       voiceTranscriptEl.id = 'voice-transcript';
       voiceTranscriptEl.style.cssText = 'font-size:clamp(13px,3.2vw,15px);letter-spacing:.04em;' +
-        'color:rgba(240,230,208,.42);font-style:italic;min-height:22px;max-width:280px;' +
+        'color:rgba(240,230,208,.68);font-style:italic;min-height:22px;max-width:280px;' +
         'text-align:center;line-height:1.5;opacity:0;transition:opacity .6s ease;';
 
       micBtn.addEventListener('click', () => toggleVoiceNoting(micBtn, voiceTranscriptEl));
@@ -981,7 +1016,7 @@ function buildObsScreen() {
         <div class="sig-label">${t?'here':'aquí'}</div>
       </div>
       <button id="affirmBtn" onclick="doAffirm()"
-        style="background:none;border:1px solid rgba(201,169,110,.22);border-radius:30px;
+        style="background:none;border:1px solid rgba(201,169,110,.55);border-radius:30px;
         padding:8px 18px;cursor:pointer;margin-left:8px;
         -webkit-tap-highlight-color:transparent;touch-action:manipulation;
         font-family:inherit;font-size:clamp(10px,2.5vw,12px);letter-spacing:.16em;
@@ -1093,7 +1128,7 @@ function buildObsSetupScreen() {
   const modeSection = document.createElement('div');
   modeSection.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;';
   const modeLabel = document.createElement('div');
-  modeLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);';
+  modeLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.65);';
   modeLabel.textContent = t ? 'particle' : 'partícula';
   modeSection.appendChild(modeLabel);
   const modeRow = document.createElement('div');
@@ -1122,7 +1157,7 @@ function buildObsSetupScreen() {
   stormWrap.id = 'stormWrap';
   stormWrap.style.cssText = 'display:none;flex-direction:column;align-items:center;gap:12px;width:100%;';
   const stormLabel = document.createElement('div');
-  stormLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);';
+  stormLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.65);';
   stormLabel.textContent = t ? 'style' : 'estilo';
   const stormRow = document.createElement('div');
   stormRow.style.cssText = 'display:flex;gap:12px;width:100%;max-width:320px;';
@@ -1150,7 +1185,7 @@ function buildObsSetupScreen() {
   timeSection.id = 'obs-time-section';
   timeSection.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;';
   const timeLabel = document.createElement('div');
-  timeLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.35);';
+  timeLabel.style.cssText = 'font-size:clamp(12px,3vw,15px);letter-spacing:.14em;color:rgba(240,230,208,.65);';
   timeLabel.textContent = t ? 'duration' : 'duración';
   timeSection.appendChild(timeLabel);
   const timeRow = document.createElement('div');
@@ -1178,8 +1213,8 @@ function buildObsSetupScreen() {
     'font-size:clamp(14px,3.5vw,17px);letter-spacing:.18em;color:rgba(201,169,110,.55);' +
     'cursor:pointer;padding:24px 48px;-webkit-tap-highlight-color:transparent;transition:color .4s ease;min-height:64px;';
   enterBtn.textContent = t ? 'enter' : 'entrar';
-  enterBtn.addEventListener('click', enterObserve);
-  enterBtn.addEventListener('touchend', e => { e.preventDefault(); enterObserve(); });
+  enterBtn.addEventListener('click', () => { if(audioCtx) playTap(); enterObserve(); });
+  enterBtn.addEventListener('touchend', e => { e.preventDefault(); if(audioCtx) playTap(); enterObserve(); });
   wrap.appendChild(enterBtn);
 
   screen.appendChild(wrap);
@@ -1265,7 +1300,11 @@ function enterObserve() {
   setTimeout(() => {
     if (obsMode === 'noting') {
       noteCount = 0; noteSense = ''; clarityLevel = 0; fieldActive = true; isCoherent = false;
-      observeParticle = new ObsParticle(); observeParticle.targetAlpha = 0.9;
+      observeParticle = new ObsParticle();
+      // Position particle at top-centre of screen, above the noting UI
+      observeParticle.cx = 0.5; observeParticle.cy = 0.18;
+      observeParticle.x = innerWidth * 0.5; observeParticle.y = innerHeight * 0.18;
+      observeParticle.targetAlpha = 0.9;
       kasinaParticle = null; particleVisible = true;
     } else {
       if (obsMode === 'kasina' && kasinaParticle) { kasinaParticle.targetAlpha = 1; }
@@ -1378,8 +1417,22 @@ function startAttentionTimer() {
 function startMicroTones() {
   clearInterval(microToneTimer);
   microToneTimer = setInterval(() => {
-    if (fieldActive && !isCoherent && currentMode === 'observe') playMicroTone();
-  }, 12000);
+    if (!fieldActive || isCoherent || currentMode !== 'observe') return;
+    if (obsMode === 'kasina') {
+      // Kasina: very soft high shimmer pulsing with clarity
+      if (!audioCtx) return;
+      const shimmerFreq = 1296 + clarityLevel * 432;
+      const os = audioCtx.createOscillator(), gs = audioCtx.createGain();
+      os.type = 'sine'; os.frequency.value = shimmerFreq;
+      const gain = 0.006 + clarityLevel * 0.012;
+      gs.gain.setValueAtTime(0, audioCtx.currentTime);
+      gs.gain.linearRampToValueAtTime(gain, audioCtx.currentTime + 0.3);
+      gs.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 3);
+      os.connect(gs); gs.connect(audioCtx.destination); os.start(); os.stop(audioCtx.currentTime + 3.5);
+    } else {
+      playMicroTone();
+    }
+  }, obsMode === 'kasina' ? 6000 : 12000);
 }
 
 function startMotionCheck() {
@@ -1610,6 +1663,7 @@ function clearObserver() {
 // Noting helpers
 function chooseNoteSense(key, el) {
   noteSense = key;
+  if (audioCtx) playNoteSense(key); else { initAudio(); if(audioCtx) playNoteSense(key); }
   document.querySelectorAll('#senseRow .sense-chip').forEach(x => x.classList.remove('active'));
   if (el) el.classList.add('active');
   const toneRow = document.getElementById('toneRow');
@@ -1915,6 +1969,7 @@ document.getElementById('s-collapse').addEventListener('click', e => {
   if (collapseStage<6) showCollapseStage(collapseStage+1);
 });
 document.getElementById('retBtn').addEventListener('click', () => {
+  if(audioCtx) playBackNav();
   clearAllBreath(); particlesHidden = false; collapseStage = 0; isTransitioning = false;
   document.querySelectorAll('.cp-stage').forEach(s => { s.classList.remove('on'); s.style.cssText=''; });
   document.getElementById('ghosts').style.opacity = '0';
@@ -1926,138 +1981,148 @@ document.getElementById('retBtn').addEventListener('click', () => {
 function bDelay(fn,ms){ const t=setTimeout(fn,ms); breathTimers.push(t); return t; }
 function clearAllBreath(){
   breathTimers.forEach(clearTimeout); breathTimers=[]; breathRunning=false;
-  const p = document.getElementById('bp');
-  if (p) { p.className = 'bp neutral'; }
+  const bp = document.getElementById('bp');
+  if (bp) { bp.className = 'bp neutral'; bp.style.opacity = '0'; }
 }
 function startBreath() {
   clearAllBreath(); breathRunning=true; breathCycle=0;
-  const stateName=curStateName, t=TRANSLATIONS[lang];
-  const p=document.getElementById('bp'), ripple=document.getElementById('bripple');
+  const stateName=curStateName;
   const btext=document.getElementById('btext');
-  p.className='bp neutral';
-  p.style.opacity = '0';
+
+  // Create bp/bripple as fixed-position elements on body if not present
+  let bp = document.getElementById('bp');
+  let rp = document.getElementById('bripple');
+  if (!bp) { bp = document.createElement('div'); bp.id='bp'; document.body.appendChild(bp); }
+  if (!rp) { rp = document.createElement('div'); rp.id='bripple'; rp.className='bripple'; document.body.appendChild(rp); }
+
+  bp.className = 'bp neutral';
+  bp.style.opacity = '0';
   btext.style.transition='none'; btext.style.opacity='0';
   btext.textContent=''; btext.className='btext';
-  ripple.className='bripple';
+  rp.className = 'bripple';
   [0,1,2].forEach(i=>{ const d=document.getElementById('bdot'+i); if(d) d.classList.remove('done'); });
 
-  const chosen = spParticles[spChosen % Math.max(spParticles.length, 1)];
-  if (chosen) {
-    spParticles.forEach((sp, i) => {
-      if (i !== spChosen % spParticles.length) sp.targetAlpha = 0;
-    });
-    chosen.targetCx = 0.5;
-    chosen.targetCy = 0.5;
-    chosen.phV = 0;
-    chosen.driftR = 0;
+  const inviteLine1 = lang === 'en' ? 'breathe in all possibilities' : 'inhala todas las posibilidades';
+  const inviteLine2 = (lang === 'en' ? 'exhale into ' : 'exhala hacia ') + stateName;
+  const cycleIn  = lang === 'en' ? 'inhale' : 'inhala';
+  const cycleOut = lang === 'en' ? 'exhale' : 'exhala';
+
+  function setPos(el, x, y) { el.style.left = x+'px'; el.style.top = y+'px'; }
+  function showText(text, cls, delayMs) {
     bDelay(() => {
-      chosen.targetAlpha = 0;
-      p.style.transition = 'opacity 1.4s ease';
-      p.style.opacity = '1';
-      // Soft settle — orb breathes in gently before first cycle
-      bDelay(() => { p.className = 'bp settling'; }, 400);
-    }, 1600);
-  } else {
-    p.style.transition = 'opacity 1s ease';
-    p.style.opacity = '1';
-    bDelay(() => { p.className = 'bp settling'; }, 600);
-  }
-
-  const inviteLine1 = lang === 'en' ? 'breathe in possibilities' : 'inhala posibilidades';
-  const inviteLine2 = (lang === 'en' ? 'exhale ' : 'exhala ') + stateName;
-
-  function showText(text,cls,delayMs){
-    bDelay(()=>{
-      const isVisible = parseFloat(btext.style.opacity||'0') > 0.05;
-      if (isVisible) {
-        btext.style.transition='opacity 0.5s ease'; btext.style.opacity='0';
-        bDelay(()=>{ btext.className='btext'+(cls?' '+cls:''); btext.textContent=text; btext.style.transition='opacity 0.9s ease'; btext.style.opacity='1'; }, 550);
+      const visible = parseFloat(btext.style.opacity||'0') > 0.05;
+      if (visible) {
+        btext.style.transition='opacity 0.4s ease'; btext.style.opacity='0';
+        bDelay(() => {
+          btext.className='btext '+cls; btext.textContent=text;
+          btext.style.transition='opacity 0.8s ease'; btext.style.opacity='1';
+        }, 450);
       } else {
-        btext.className='btext'+(cls?' '+cls:''); btext.textContent=text;
-        btext.style.transition='opacity 1.1s ease'; btext.style.opacity='1';
+        btext.className='btext '+cls; btext.textContent=text;
+        btext.style.transition='opacity 1s ease'; btext.style.opacity='1';
       }
     }, delayMs||0);
   }
-  function hideText(delayMs){ bDelay(()=>{ btext.style.transition='opacity 0.8s ease'; btext.style.opacity='0'; }, delayMs||0); }
+  function hideText(delayMs) {
+    bDelay(()=>{ btext.style.transition='opacity 0.8s ease'; btext.style.opacity='0'; }, delayMs||0);
+  }
 
-  // Intro text — fades in with the settling orb
+  const chosen = spParticles[spChosen % Math.max(spParticles.length, 1)];
+
+  // Place bp exactly on canvas particle — instant appear, no overlap
+  const startX = chosen ? chosen.x : innerWidth * 0.5;
+  const startY = chosen ? chosen.y : innerHeight * 0.5;
+  setPos(bp, startX, startY);
+  setPos(rp, startX, startY);
+
+  if (chosen) {
+    // Hide all canvas particles immediately
+    spParticles.forEach(sp => { sp.targetAlpha = 0; });
+    // bp appears instantly at particle location
+    bDelay(() => {
+      bp.style.transition = 'opacity 0s';
+      bp.style.opacity = '1';
+      // Move to centre
+      bDelay(() => {
+        bp.className = 'bp neutral';
+        setPos(bp, innerWidth * 0.5, innerHeight * 0.5);
+        setPos(rp, innerWidth * 0.5, innerHeight * 0.5);
+      }, 60);
+    }, 60);
+  } else {
+    bp.style.transition = 'opacity 1s ease';
+    bp.style.opacity = '1';
+    setPos(bp, innerWidth * 0.5, innerHeight * 0.5);
+    setPos(rp, innerWidth * 0.5, innerHeight * 0.5);
+  }
+
+  // Gentle settle at centre
+  bDelay(() => { bp.className = 'bp settling'; }, 350);
+
+  // Intro instructions — large and prominent
   bDelay(() => {
-    btext.className = 'btext dim';
+    btext.className = 'btext intro';
     btext.textContent = inviteLine1;
     btext.style.transition = 'opacity 1.6s ease';
     btext.style.opacity = '1';
-  }, 2200);
+  }, 1000);
   bDelay(() => {
-    btext.style.transition = 'opacity 1s ease'; btext.style.opacity = '0';
+    btext.style.transition = 'opacity 0.9s ease'; btext.style.opacity = '0';
     bDelay(() => {
-      btext.textContent = inviteLine2; btext.className = 'btext gold';
+      btext.className = 'btext intro-gold';
+      btext.textContent = inviteLine2;
       btext.style.transition = 'opacity 1.6s ease'; btext.style.opacity = '1';
-    }, 1100);
-  }, 4800);
-  bDelay(() => { btext.style.transition = 'opacity 1.2s ease'; btext.style.opacity = '0'; }, 7400);
-  bDelay(cycle, 9000);
+    }, 950);
+  }, 3800);
+  hideText(6800);
+  bDelay(cycle, 8200);
 
-  // Cycle timing:
-  // 0ms     — inhale begins (4.5s)
-  // 200ms   — ripple soft pulse on inhale
-  // 4500ms  — hold at peak (1.5s)
-  // 6000ms  — exhale begins (5s), word appears immediately
-  // 11000ms — rest at base (1s)
-  // 12000ms — next cycle
   const INHALE = 4500, HOLD = 1500, EXHALE = 5000, REST = 1000;
-  const CYCLE = INHALE + HOLD + EXHALE + REST; // 12000ms
+  const CYCLE = INHALE + HOLD + EXHALE + REST;
 
-  function cycle(){
-    if(breathCycle>=3){
-      breathRunning=false;
-      bDelay(()=>{
+  function cycle() {
+    if (breathCycle >= 3) {
+      breathRunning = false;
+      bDelay(() => {
         btext.style.transition='opacity 0.9s ease'; btext.style.opacity='0';
-        p.className='bp crystallised';
+        bp.className = 'bp crystallised';
         initScene('state_chosen', spChosen);
-        const tapEl=document.getElementById('tapNext');
-        bDelay(()=>{ tapEl.style.transition='opacity 0.8s ease'; tapEl.style.opacity='1'; },1800);
-      },700);
+        const tapEl = document.getElementById('tapNext');
+        bDelay(() => { tapEl.style.transition='opacity 0.8s ease'; tapEl.style.opacity='1'; }, 1800);
+      }, 700);
       return;
     }
     breathCycle++;
 
-    // Inhale
-    bDelay(()=>{
-      p.className='bp inhaling';
-      ripple.className='bripple';
-      void ripple.offsetWidth;
-      // Soft ripple on inhale peak
-      bDelay(()=>{ ripple.className='bripple expand-soft'; }, INHALE - 200);
+    // Inhale — expand to blurry superposition
+    bDelay(() => {
+      bp.className = 'bp inhaling';
+      rp.className = 'bripple'; void rp.offsetWidth;
+      bDelay(() => { rp.className = 'bripple expand-soft'; }, INHALE - 300);
     }, 80);
-
-    // Invite text on inhale
-    bDelay(()=>{ showText(inviteLine1,'dim',0); }, 800);
+    showText(cycleIn, 'cycle', 600);
     hideText(INHALE - 400);
 
-    // Hold at peak
-    bDelay(()=>{ p.className='bp holding'; }, INHALE + 80);
+    // Hold
+    bDelay(() => { bp.className = 'bp holding'; }, INHALE + 80);
 
-    // Exhale — word appears immediately as exhale starts
-    bDelay(()=>{
-      p.className='bp exhaling';
-      ripple.className='bripple';
-      void ripple.offsetWidth;
-      ripple.className='bripple expand';
+    // Exhale — collapse to sharp bright point
+    bDelay(() => {
+      bp.className = 'bp exhaling';
+      rp.className = 'bripple'; void rp.offsetWidth;
+      rp.className = 'bripple expand';
       playExhaleCollapse();
-      const cw=document.getElementById('cword'); if(cw) cw.classList.add('exhaling');
+      const cw = document.getElementById('cword'); if (cw) cw.classList.add('exhaling');
     }, INHALE + HOLD + 80);
+    showText(cycleOut, 'cycle-exhale', INHALE + HOLD + 100);
+    hideText(INHALE + HOLD + EXHALE - 600);
+    bDelay(() => { const cw=document.getElementById('cword'); if(cw) cw.classList.remove('exhaling'); }, INHALE+HOLD+EXHALE-300);
 
-    // State name appears right as exhale begins
-    bDelay(()=>{ showText(stateName,'gold',0); }, INHALE + HOLD + 120);
-
-    // Word fades, cword recovers
-    hideText(INHALE + HOLD + EXHALE - 800);
-    bDelay(()=>{ const cw=document.getElementById('cword'); if(cw) cw.classList.remove('exhaling'); }, INHALE + HOLD + EXHALE - 400);
-
-    // Rest — dot lights, orb returns to neutral
-    bDelay(()=>{
-      const dot=document.getElementById('bdot'+(breathCycle-1)); if(dot) dot.classList.add('done');
-      p.className='bp neutral';
+    // Rest
+    bDelay(() => {
+      const dot = document.getElementById('bdot'+(breathCycle-1));
+      if (dot) dot.classList.add('done');
+      bp.className = 'bp neutral';
     }, INHALE + HOLD + EXHALE + 80);
 
     bDelay(cycle, CYCLE);
@@ -2203,16 +2268,21 @@ function spawnStormWord() {
     'clamp(18px,5vw,28px)'
   ];
   el.style.fontSize = sizes[Math.floor(Math.random() * sizes.length)];
-  const margin = 40;
-  const x = margin + Math.random() * (innerWidth - margin * 2 - 180);
-  const y = margin + Math.random() * (innerHeight - margin * 2 - 60);
+  el.style.color = 'rgba(240,204,136,0)';
+  layer.appendChild(el); // append first so we can measure
+  const wordW = el.offsetWidth || 120;
+  const wordH = el.offsetHeight || 40;
+  const safeL = 16;
+  const safeR = innerWidth - wordW - 16;
+  const safeT = 80;
+  const safeB = innerHeight - wordH - 80;
+  const x = safeL + Math.random() * Math.max(0, safeR - safeL);
+  const y = safeT + Math.random() * Math.max(0, safeB - safeT);
   el.style.left = x + 'px';
   el.style.top = y + 'px';
-  el.style.color = 'rgba(240,204,136,0)';
-  layer.appendChild(el);
-  const speed = 0.04 + Math.random() * 0.06; // slower drift, words are big
+  const speed = 0.04 + Math.random() * 0.06;
   const angle = Math.random() * Math.PI * 2;
-  const maxAlpha = 0.55 + Math.random() * 0.4; // much brighter
+  const maxAlpha = 0.55 + Math.random() * 0.4;
   const wordObj = {
     el, x, y,
     vx: Math.cos(angle) * speed,
@@ -2221,7 +2291,7 @@ function spawnStormWord() {
     targetAlpha: maxAlpha,
     phase: Math.random() * Math.PI * 2,
     born: Date.now(),
-    holdMs: 800 + Math.random() * 1200, // faster — 0.8–2s hold
+    holdMs: 800 + Math.random() * 1200,
     fading: false
   };
   stormActiveWords.push(wordObj);
@@ -2291,7 +2361,7 @@ function buildShadowGrid() {
     o.style.setProperty('--shadow-dur', (3.5+Math.random()*3).toFixed(2)+'s');
     o.style.animationDelay = (-Math.random()*4).toFixed(2)+'s';
     o.textContent = lang==='en' ? name : es[i];
-    const go = () => { decStateName=name; decStateNameES=es[i]; showDecBodyMap(); };
+    const go = () => { if(audioCtx) playTap(); decStateName=name; decStateNameES=es[i]; showDecBodyMap(); };
     o.addEventListener('click', go);
     o.addEventListener('touchend', e => { e.preventDefault(); go(); });
     grid.appendChild(o);
@@ -2460,6 +2530,17 @@ function showBodyMap(mode, payload) {
       activeSpot = spot.key;
       document.querySelectorAll('.body-node').forEach(x => x.classList.remove('active'));
       b.classList.add('active');
+      // Body zone tones: head=high, pelvis=low
+      if (audioCtx) {
+        const zoneFreqs = { head:1056, throat:792, chest:528, stomach:396, pelvis:264 };
+        const f = zoneFreqs[spot.key] || 528;
+        const oz = audioCtx.createOscillator(), gz = audioCtx.createGain();
+        oz.type='sine'; oz.frequency.value=f;
+        gz.gain.setValueAtTime(0,audioCtx.currentTime);
+        gz.gain.linearRampToValueAtTime(0.04,audioCtx.currentTime+0.08);
+        gz.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+1.5);
+        oz.connect(gz); gz.connect(audioCtx.destination); oz.start(); oz.stop(audioCtx.currentTime+1.8);
+      }
 
       if (isDecohere) {
         decBodySpot = spot.key;
