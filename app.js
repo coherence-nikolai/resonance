@@ -1859,7 +1859,11 @@ document.getElementById('retBtn').addEventListener('click', () => {
 
 // Breath
 function bDelay(fn,ms){ const t=setTimeout(fn,ms); breathTimers.push(t); return t; }
-function clearAllBreath(){ breathTimers.forEach(clearTimeout); breathTimers=[]; breathRunning=false; }
+function clearAllBreath(){
+  breathTimers.forEach(clearTimeout); breathTimers=[]; breathRunning=false;
+  const p = document.getElementById('bp');
+  if (p) { p.className = 'bp neutral'; }
+}
 function startBreath() {
   clearAllBreath(); breathRunning=true; breathCycle=0;
   const stateName=curStateName, t=TRANSLATIONS[lang];
@@ -1869,7 +1873,7 @@ function startBreath() {
   p.style.opacity = '0';
   btext.style.transition='none'; btext.style.opacity='0';
   btext.textContent=''; btext.className='btext';
-  ripple.classList.remove('expand');
+  ripple.className='bripple';
   [0,1,2].forEach(i=>{ const d=document.getElementById('bdot'+i); if(d) d.classList.remove('done'); });
 
   const chosen = spParticles[spChosen % Math.max(spParticles.length, 1)];
@@ -1883,13 +1887,19 @@ function startBreath() {
     chosen.driftR = 0;
     bDelay(() => {
       chosen.targetAlpha = 0;
-      p.style.transition = 'opacity 1.2s ease';
+      p.style.transition = 'opacity 1.4s ease';
       p.style.opacity = '1';
-    }, 1800);
+      // Soft settle — orb breathes in gently before first cycle
+      bDelay(() => { p.className = 'bp settling'; }, 400);
+    }, 1600);
   } else {
     p.style.transition = 'opacity 1s ease';
     p.style.opacity = '1';
+    bDelay(() => { p.className = 'bp settling'; }, 600);
   }
+
+  const inviteLine1 = lang === 'en' ? 'breathe in possibilities' : 'inhala posibilidades';
+  const inviteLine2 = (lang === 'en' ? 'exhale ' : 'exhala ') + stateName;
 
   function showText(text,cls,delayMs){
     bDelay(()=>{
@@ -1903,28 +1913,40 @@ function startBreath() {
       }
     }, delayMs||0);
   }
-  function hideText(delayMs){ bDelay(()=>{ btext.style.transition='opacity 0.7s ease'; btext.style.opacity='0'; }, delayMs||0); }
-  const inviteLine1 = lang === 'en' ? 'breathe in possibilities' : 'inhala posibilidades';
-  const inviteLine2 = (lang === 'en' ? 'breathe out ' : 'exhala ') + stateName;
-  btext.className = 'btext dim';
-  btext.textContent = inviteLine1;
-  bDelay(() => { btext.style.transition = 'opacity 1.4s ease'; btext.style.opacity = '1'; }, 200);
+  function hideText(delayMs){ bDelay(()=>{ btext.style.transition='opacity 0.8s ease'; btext.style.opacity='0'; }, delayMs||0); }
+
+  // Intro text — fades in with the settling orb
+  bDelay(() => {
+    btext.className = 'btext dim';
+    btext.textContent = inviteLine1;
+    btext.style.transition = 'opacity 1.6s ease';
+    btext.style.opacity = '1';
+  }, 2200);
   bDelay(() => {
     btext.style.transition = 'opacity 1s ease'; btext.style.opacity = '0';
     bDelay(() => {
       btext.textContent = inviteLine2; btext.className = 'btext gold';
-      btext.style.transition = 'opacity 1.4s ease'; btext.style.opacity = '1';
-    }, 1050);
-  }, 2800);
-  bDelay(() => { btext.style.transition = 'opacity 1.2s ease'; btext.style.opacity = '0'; }, 5500);
-  bDelay(cycle, 7000);
+      btext.style.transition = 'opacity 1.6s ease'; btext.style.opacity = '1';
+    }, 1100);
+  }, 4800);
+  bDelay(() => { btext.style.transition = 'opacity 1.2s ease'; btext.style.opacity = '0'; }, 7400);
+  bDelay(cycle, 9000);
+
+  // Cycle timing:
+  // 0ms     — inhale begins (4.5s)
+  // 200ms   — ripple soft pulse on inhale
+  // 4500ms  — hold at peak (1.5s)
+  // 6000ms  — exhale begins (5s), word appears immediately
+  // 11000ms — rest at base (1s)
+  // 12000ms — next cycle
+  const INHALE = 4500, HOLD = 1500, EXHALE = 5000, REST = 1000;
+  const CYCLE = INHALE + HOLD + EXHALE + REST; // 12000ms
 
   function cycle(){
     if(breathCycle>=3){
       breathRunning=false;
       bDelay(()=>{
         btext.style.transition='opacity 0.9s ease'; btext.style.opacity='0';
-        // [AE5] Crystallised glow uses deep gold not warm-white
         p.className='bp crystallised';
         initScene('state_chosen', spChosen);
         const tapEl=document.getElementById('tapNext');
@@ -1933,18 +1955,47 @@ function startBreath() {
       return;
     }
     breathCycle++;
-    bDelay(()=>{ p.className='bp inhaling'; ripple.classList.remove('expand'); void ripple.offsetWidth; }, 80);
-    bDelay(()=>{ showText(inviteLine1,'dim',0); }, 2000);
+
+    // Inhale
     bDelay(()=>{
-      p.className='bp exhaling'; ripple.classList.remove('expand'); void ripple.offsetWidth; ripple.classList.add('expand');
+      p.className='bp inhaling';
+      ripple.className='bripple';
+      void ripple.offsetWidth;
+      // Soft ripple on inhale peak
+      bDelay(()=>{ ripple.className='bripple expand-soft'; }, INHALE - 200);
+    }, 80);
+
+    // Invite text on inhale
+    bDelay(()=>{ showText(inviteLine1,'dim',0); }, 800);
+    hideText(INHALE - 400);
+
+    // Hold at peak
+    bDelay(()=>{ p.className='bp holding'; }, INHALE + 80);
+
+    // Exhale — word appears immediately as exhale starts
+    bDelay(()=>{
+      p.className='bp exhaling';
+      ripple.className='bripple';
+      void ripple.offsetWidth;
+      ripple.className='bripple expand';
       playExhaleCollapse();
       const cw=document.getElementById('cword'); if(cw) cw.classList.add('exhaling');
-    }, 5000);
-    bDelay(()=>{ showText(stateName,'gold',0); }, 5400);
-    bDelay(()=>{ const cw=document.getElementById('cword'); if(cw) cw.classList.remove('exhaling'); }, 9200);
-    hideText(8800);
-    bDelay(()=>{ const dot=document.getElementById('bdot'+(breathCycle-1)); if(dot) dot.classList.add('done'); p.className='bp neutral'; }, 9200);
-    bDelay(cycle, 10400);
+    }, INHALE + HOLD + 80);
+
+    // State name appears right as exhale begins
+    bDelay(()=>{ showText(stateName,'gold',0); }, INHALE + HOLD + 120);
+
+    // Word fades, cword recovers
+    hideText(INHALE + HOLD + EXHALE - 800);
+    bDelay(()=>{ const cw=document.getElementById('cword'); if(cw) cw.classList.remove('exhaling'); }, INHALE + HOLD + EXHALE - 400);
+
+    // Rest — dot lights, orb returns to neutral
+    bDelay(()=>{
+      const dot=document.getElementById('bdot'+(breathCycle-1)); if(dot) dot.classList.add('done');
+      p.className='bp neutral';
+    }, INHALE + HOLD + EXHALE + 80);
+
+    bDelay(cycle, CYCLE);
   }
 }
 
