@@ -364,6 +364,42 @@ function playAffirmSound() {
   g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+1.2);
   o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+1.5);
 }
+function playTonePleasant() {
+  // Ascending — warm, rising two-note chime
+  if (!audioCtx) return;
+  [[528, 0], [660, 0.22], [792, 0.42]].forEach(([f, delay]) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    const t0 = audioCtx.currentTime + delay;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.05, t0 + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.4);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 1.6);
+  });
+}
+function playToneUnpleasant() {
+  // Descending — cooler, falling
+  if (!audioCtx) return;
+  [[440, 0], [330, 0.22], [264, 0.42]].forEach(([f, delay]) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    const t0 = audioCtx.currentTime + delay;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.045, t0 + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.6);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 1.8);
+  });
+}
+function playToneNeutral() {
+  // Single mid tone — still, neither rising nor falling
+  if (!audioCtx) return;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine'; o.frequency.value = 396;
+  g.gain.setValueAtTime(0, audioCtx.currentTime);
+  g.gain.linearRampToValueAtTime(0.04, audioCtx.currentTime + 0.12);
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 2.2);
+  o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 2.5);
+}
 function playDecohereRelease() {
   if (!audioCtx) return;
   [396, 180, 90].forEach((f, i) => {
@@ -619,8 +655,16 @@ const NOTE_SENSES = {
   ]
 };
 const NOTE_TONES = {
-  en: [{key:'pleasant',label:'+'},{key:'unpleasant',label:'–'},{key:'neutral',label:'○'}],
-  es: [{key:'pleasant',label:'+'},{key:'unpleasant',label:'–'},{key:'neutral',label:'○'}]
+  en: [
+    {key:'pleasant',  label:'+', word:'pleasant',   color:'rgba(201,169,110,', border:'rgba(201,140, 60,'},
+    {key:'unpleasant',label:'–', word:'unpleasant',  color:'rgba(110,150,201,', border:'rgba( 80,120,200,'},
+    {key:'neutral',   label:'○', word:'neutral',     color:'rgba(180,175,165,', border:'rgba(160,155,145,'}
+  ],
+  es: [
+    {key:'pleasant',  label:'+', word:'agradable',   color:'rgba(201,169,110,', border:'rgba(201,140, 60,'},
+    {key:'unpleasant',label:'–', word:'desagradable', color:'rgba(110,150,201,', border:'rgba( 80,120,200,'},
+    {key:'neutral',   label:'○', word:'neutro',       color:'rgba(180,175,165,', border:'rgba(160,155,145,'}
+  ]
 };
 const STORM_WORDS = {
   en: ['changing','passing','not self','empty','thinking','tightening','sound','pressure'],
@@ -667,7 +711,10 @@ function buildObsScreen() {
     NOTE_TONES[lang].forEach(tone => {
       const b = document.createElement('button');
       b.className = 'tone-chip';
-      b.textContent = tone.label;
+      b.dataset.toneKey = tone.key;
+      b.innerHTML = `<span class="tone-chip-symbol">${tone.label}</span><span class="tone-chip-word">${tone.word}</span>`;
+      b.style.setProperty('--tone-color', tone.color);
+      b.style.setProperty('--tone-border', tone.border);
       b.addEventListener('click', () => chooseNoteTone(tone.key, b));
       toneRow.appendChild(b);
     });
@@ -1213,7 +1260,9 @@ function chooseNoteTone(key, el) {
     if (d) d.classList.toggle('lit', i < noteCount);
   }
   if (observeParticle) observeParticle.scatter();
-  playAffirmSound();
+  if (key === 'pleasant') playTonePleasant();
+  else if (key === 'unpleasant') playToneUnpleasant();
+  else playToneNeutral();
   pulseStormWord(noteSense + ' · ' + key);
   setTimeout(() => {
     document.querySelectorAll('#senseRow .sense-chip').forEach(x => x.classList.remove('active'));

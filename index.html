@@ -548,6 +548,36 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
   cursor:pointer;font-family:inherit;}
 .sense-chip.active,.tone-chip.active{border-color:rgba(201,169,110,.7);color:rgba(240,204,136,.92);
   box-shadow:0 0 18px rgba(240,204,136,.10);}
+/* Tone chips — coloured tints */
+.tone-row{gap:10px;max-width:360px;}
+.tone-chip{display:flex;flex-direction:column;align-items:center;gap:6px;
+  flex:1;padding:16px 10px;min-height:72px;min-width:80px;
+  background:var(--tone-color, rgba(201,169,110,)0.04);
+  border-color:var(--tone-border, rgba(201,169,110,)0.18);}
+.tone-chip-symbol{font-size:22px;line-height:1;color:var(--tone-color, rgba(201,169,110,)0.7);
+  transition:color .3s ease;}
+.tone-chip-word{font-size:clamp(11px,2.8vw,13px);letter-spacing:.10em;opacity:.6;}
+.tone-chip[data-tone-key="pleasant"]{
+  background:rgba(201,169,110,.04);border-color:rgba(201,140,60,.22);}
+.tone-chip[data-tone-key="pleasant"] .tone-chip-symbol{color:rgba(240,190,80,.7);}
+.tone-chip[data-tone-key="pleasant"].active{
+  background:rgba(201,169,110,.10);border-color:rgba(240,180,60,.7);
+  box-shadow:0 0 20px rgba(240,190,80,.15);}
+.tone-chip[data-tone-key="pleasant"].active .tone-chip-symbol{color:rgba(240,200,100,.95);}
+.tone-chip[data-tone-key="unpleasant"]{
+  background:rgba(110,150,201,.04);border-color:rgba(80,130,210,.22);}
+.tone-chip[data-tone-key="unpleasant"] .tone-chip-symbol{color:rgba(120,160,220,.6);}
+.tone-chip[data-tone-key="unpleasant"].active{
+  background:rgba(110,150,201,.10);border-color:rgba(100,150,230,.65);
+  box-shadow:0 0 20px rgba(110,150,220,.15);}
+.tone-chip[data-tone-key="unpleasant"].active .tone-chip-symbol{color:rgba(140,180,240,.95);}
+.tone-chip[data-tone-key="neutral"]{
+  background:rgba(180,175,165,.04);border-color:rgba(160,155,145,.22);}
+.tone-chip[data-tone-key="neutral"] .tone-chip-symbol{color:rgba(200,195,185,.55);}
+.tone-chip[data-tone-key="neutral"].active{
+  background:rgba(180,175,165,.10);border-color:rgba(180,175,165,.55);
+  box-shadow:0 0 16px rgba(180,175,165,.12);}
+.tone-chip[data-tone-key="neutral"].active .tone-chip-symbol{color:rgba(220,215,205,.9);}
 .storm-word{font-size:clamp(18px,5vw,28px);letter-spacing:.16em;color:rgba(240,230,208,.45);
   min-height:34px;opacity:0;transition:opacity .8s ease;}
 
