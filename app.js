@@ -162,46 +162,110 @@ let clarityLevel = 0, particleVisible = false;
 class KasinaParticle {
   constructor() {
     this.x = innerWidth * 0.5;
-    this.y = innerHeight * 0.38;
-    this.r = 7;
+    this.y = innerHeight * 0.5;
+    this.r = 9;
     this.alpha = 0; this.targetAlpha = 1;
     this.breathPh = 0;
     this.shudderX = 0; this.shudderY = 0;
     this.pulsePh = 0;
     this.shudderPh = 0;
+    this.rayPh = 0;       // slow ray rotation
+    this.flickPh = 0;     // fast micro-flicker
+    this.NUM_RAYS = 8;
   }
   update() {
-    this.breathPh  += 0.018;
-    this.pulsePh   += 0.06;
-    this.shudderPh += 0.22;
-    const shudderAmp = isStill ? 0.8 + 1.2*Math.sin(this.shudderPh)*Math.cos(this.shudderPh*1.3)
-                                : 3 + 6*Math.random();
-    this.shudderX = (Math.random()-0.5) * shudderAmp;
-    this.shudderY = (Math.random()-0.5) * shudderAmp;
+    this.breathPh  += 0.016;
+    this.pulsePh   += 0.08;
+    this.shudderPh += 0.28;
+    this.rayPh     += 0.004;   // very slow rotation
+    this.flickPh   += 0.35;    // fast inner flicker
+
+    const shudderAmp = isStill
+      ? 0.6 + 0.9 * Math.sin(this.shudderPh) * Math.cos(this.shudderPh * 1.7)
+      : 2.5 + 5 * Math.random();
+    this.shudderX = (Math.random() - 0.5) * shudderAmp;
+    this.shudderY = (Math.random() - 0.5) * shudderAmp;
     this.alpha += (this.targetAlpha - this.alpha) * 0.025;
   }
   draw() {
     if (this.alpha < 0.01) return;
     const px = this.x + this.shudderX;
     const py = this.y + this.shudderY;
-    const breathFactor = 0.72 + 0.28 * Math.sin(this.breathPh);
-    const microPulse   = 1 + 0.04 * Math.sin(this.pulsePh);
-    const blur = (1 - clarityLevel) * 10 + 2;
-    const r    = (this.r + clarityLevel * 3) * microPulse;
-    const glow = (24 + clarityLevel * 50) * breathFactor;
-    const ga   = (0.18 + clarityLevel * 0.4) * this.alpha;
+    const breathFactor = 0.68 + 0.32 * Math.sin(this.breathPh);
+    const microPulse   = 1 + 0.07 * Math.sin(this.pulsePh);
+    const flicker      = 0.88 + 0.12 * Math.sin(this.flickPh);
+    const cl = Math.max(clarityLevel, 0.15); // minimum presence even at zero clarity
+
+    // Core radius
+    const r = (this.r + cl * 5) * microPulse;
+
+    // Glow layers — three concentric halos
+    const g1 = (18 + cl * 28) * breathFactor;   // inner
+    const g2 = (55 + cl * 90) * breathFactor;   // mid
+    const g3 = (120 + cl * 160) * breathFactor; // corona
+
     cx.save();
-    cx.filter = `blur(${blur.toFixed(1)}px)`;
-    const grad = cx.createRadialGradient(px, py, 0, px, py, glow);
-    grad.addColorStop(0, `rgba(240,204,136,${(ga).toFixed(3)})`);
-    grad.addColorStop(0.5, `rgba(240,180,90,${(ga*0.4).toFixed(3)})`);
-    grad.addColorStop(1, 'rgba(240,204,136,0)');
-    cx.fillStyle = grad;
-    cx.beginPath(); cx.arc(px, py, glow, 0, Math.PI*2); cx.fill();
-    cx.filter = 'none';
+
+    // ── Corona (outermost, very soft) ──
+    const corona = cx.createRadialGradient(px, py, g2 * 0.5, px, py, g3);
+    corona.addColorStop(0, `rgba(240,190,80,${(0.06 * this.alpha * breathFactor).toFixed(3)})`);
+    corona.addColorStop(1, 'rgba(240,190,80,0)');
+    cx.fillStyle = corona;
+    cx.beginPath(); cx.arc(px, py, g3, 0, Math.PI * 2); cx.fill();
+
+    // ── Mid halo ──
+    const midGrad = cx.createRadialGradient(px, py, 0, px, py, g2);
+    midGrad.addColorStop(0, `rgba(255,220,140,${(0.22 * this.alpha * breathFactor * flicker).toFixed(3)})`);
+    midGrad.addColorStop(0.4, `rgba(240,190,80,${(0.14 * this.alpha * breathFactor).toFixed(3)})`);
+    midGrad.addColorStop(1, 'rgba(240,190,80,0)');
+    cx.fillStyle = midGrad;
+    cx.beginPath(); cx.arc(px, py, g2, 0, Math.PI * 2); cx.fill();
+
+    // ── Rays ──
+    const rayCount = this.NUM_RAYS;
+    for (let i = 0; i < rayCount; i++) {
+      const angle = this.rayPh + (Math.PI * 2 / rayCount) * i;
+      // Each ray has its own length pulse offset
+      const lenPulse = 0.55 + 0.45 * Math.sin(this.breathPh * 1.3 + i * 0.8);
+      const rayLen   = (g1 * 2.2 + cl * 60) * lenPulse * breathFactor;
+      const rayWidth = r * 0.18;
+      const rayAlpha = (0.12 + cl * 0.22) * this.alpha * lenPulse * flicker;
+
+      cx.save();
+      cx.translate(px, py);
+      cx.rotate(angle);
+      const rayGrad = cx.createLinearGradient(r, 0, r + rayLen, 0);
+      rayGrad.addColorStop(0, `rgba(255,220,140,${rayAlpha.toFixed(3)})`);
+      rayGrad.addColorStop(0.5, `rgba(240,190,80,${(rayAlpha * 0.5).toFixed(3)})`);
+      rayGrad.addColorStop(1, 'rgba(240,190,80,0)');
+      cx.fillStyle = rayGrad;
+      cx.beginPath();
+      cx.moveTo(r, -rayWidth);
+      cx.lineTo(r + rayLen, 0);
+      cx.lineTo(r, rayWidth);
+      cx.closePath();
+      cx.fill();
+      cx.restore();
+    }
+
+    // ── Inner glow ──
+    const innerGrad = cx.createRadialGradient(px, py, 0, px, py, g1);
+    innerGrad.addColorStop(0, `rgba(255,240,180,${(0.9 * this.alpha * flicker).toFixed(3)})`);
+    innerGrad.addColorStop(0.3, `rgba(255,210,120,${(0.55 * this.alpha * breathFactor).toFixed(3)})`);
+    innerGrad.addColorStop(1, 'rgba(240,190,80,0)');
+    cx.fillStyle = innerGrad;
+    cx.beginPath(); cx.arc(px, py, g1, 0, Math.PI * 2); cx.fill();
+
+    // ── Hard core ──
+    cx.globalAlpha = this.alpha * (0.85 + 0.15 * flicker);
+    cx.fillStyle = `rgba(255,248,220,1)`;
+    cx.beginPath(); cx.arc(px, py, r, 0, Math.PI * 2); cx.fill();
+
+    // ── Tiny hot centre ──
     cx.globalAlpha = this.alpha;
-    cx.fillStyle = `rgba(240,210,140,${0.75 + clarityLevel*0.25})`;
-    cx.beginPath(); cx.arc(px, py, r, 0, Math.PI*2); cx.fill();
+    cx.fillStyle = 'rgba(255,255,240,1)';
+    cx.beginPath(); cx.arc(px, py, r * 0.45, 0, Math.PI * 2); cx.fill();
+
     cx.restore();
   }
 }
@@ -888,8 +952,9 @@ function buildObsScreen() {
   const modeHint = obsMode === 'kasina'
     ? (t ? 'One point.<br>Hold it gently.' : 'Un punto.<br>Sostenlo suavemente.')
     : (t ? 'One particle.<br>Just watch it.' : 'Una partícula.<br>Solo obsérvala.');
+  const hintTop = obsMode === 'kasina' ? '62%' : '42%';
   screen.innerHTML = `
-    <div id="obs-hint-txt" style="position:fixed;top:42%;left:50%;transform:translate(-50%,-50%);
+    <div id="obs-hint-txt" style="position:fixed;top:${hintTop};left:50%;transform:translate(-50%,-50%);
       text-align:center;opacity:0;transition:opacity 1.5s ease;z-index:20;pointer-events:none;">
       <div style="font-size:clamp(22px,6vw,30px);font-weight:300;letter-spacing:.12em;
         color:rgba(201,169,110,.5);margin-bottom:18px;">${obsMode==='kasina'?'·':'◎'}</div>
@@ -1720,7 +1785,7 @@ function buildCollapseField() {
     const len = st.name.length;
     const size = len<=5?'clamp(32px,9vw,46px)':len<=7?'clamp(28px,7.5vw,38px)':len<=8?'clamp(24px,6.5vw,32px)':len<=10?'clamp(20px,5.5vw,28px)':'clamp(18px,4.8vw,24px)';
     o.innerHTML = `<div class="oname" style="font-size:${size}">${st.name}</div>`;
-    // [AE2] Orb hover: brief sharp-pulse, then body map, then collapse
+    // [AE2] Orb hover: brief sharp-pulse before collapse
     const go = () => {
       if (isTransitioning) return; // [TECH3]
       o.style.filter = 'blur(0px)';
@@ -1731,7 +1796,7 @@ function buildCollapseField() {
         document.querySelectorAll('.orb').forEach(el => { el.classList.remove('collapsing'); el.classList.add('fading'); });
         o.classList.remove('fading'); o.classList.add('collapsing');
         spChosen = idx;
-        setTimeout(() => showBodyMap('collapse', st), 320);
+        setTimeout(() => selectState(st), 320);
       }, 180);
     };
     o.addEventListener('click', go);
