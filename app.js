@@ -174,43 +174,44 @@ let spParticles = [];
 // ── BREATH ORB — pure canvas, quantum collapse breathing ──
 // Driven entirely by elapsed time in RAF loop. No CSS transitions.
 class BreathOrb {
-  constructor(x, y) {
+  constructor(x, y, palette) {
     this.x = x; this.y = y;
     this.targetX = innerWidth * 0.5;
     this.targetY = innerHeight * 0.5;
     this.alpha = 1;
     this.cycleCount = 0;
     this.maxCycles = 3;
-    this.phase = 'settling'; // settling | inhale | hold | exhale | rest | crystallised | done
+    this.phase = 'settling';
     this.phaseStart = performance.now();
     this.cycleComplete = false;
     this.onCyclesDone = null;
-    // Eased display values driven toward targets
     this.dispRadius = 9;
     this.dispBlur = 0;
     this.dispGlow = 1;
-    // Phase durations (ms)
     this.SETTLE = 1800;
     this.INHALE = 4500;
     this.HOLD   = 1500;
     this.EXHALE = 5000;
     this.REST   = 800;
-    // Ripple
     this.ripples = [];
-    // Micro-flicker
     this.flickPh = 0;
-    // Label callback
     this.onPhaseChange = null;
-    // State word drawn inside orb — fades over 3 cycles
     this.wordText = '';
     this.wordAlpha = 0;
     this.wordTargetAlpha = 0;
-    // Morph phase
     this.wordScale = 1;
     this.morphStartY = 0;
-    this.MORPH_DURATION = 2800; // ms for lift animation
-    this.MORPH_LIFT = innerHeight * 0.55; // how far it rises
+    this.MORPH_DURATION = 2800;
+    this.MORPH_LIFT = innerHeight * 0.55;
     this.onMorphDone = null;
+    // Colour palette: 'gold' (Collapse) or 'violet' (Witness)
+    if (palette === 'violet') {
+      this.c1 = '210,180,240'; this.c2 = '175,135,215';
+      this.c3 = '170,130,210'; this.c4 = '230,210,250'; this.c5 = '200,170,235';
+    } else {
+      this.c1 = '255,220,140'; this.c2 = '240,190,80';
+      this.c3 = '240,190,80';  this.c4 = '255,240,180'; this.c5 = '240,210,140';
+    }
   }
 
   get elapsed() { return performance.now() - this.phaseStart; }
@@ -337,6 +338,7 @@ class BreathOrb {
     const bl = Math.max(0, this.dispBlur);
     const gl = this.dispGlow;
     const flicker = 0.92 + 0.08 * Math.sin(this.flickPh);
+    const c1=this.c1, c2=this.c2, c3=this.c3, c4=this.c4, c5=this.c5;
 
     cx.save();
 
@@ -344,51 +346,50 @@ class BreathOrb {
     this.ripples.forEach(rp => {
       cx.save();
       cx.globalAlpha = rp.alpha;
-      cx.strokeStyle = 'rgba(240,204,136,1)';
+      cx.strokeStyle = `rgba(${c3},1)`;
       cx.lineWidth = 1;
       cx.beginPath(); cx.arc(px, py, rp.r, 0, Math.PI * 2); cx.stroke();
       cx.restore();
     });
 
-    // ── Outer glow (corona) — grows on inhale, collapses on exhale ──
+    // ── Outer glow (corona) ──
     const coronaR = r * 3.5 + bl * 8;
     if (coronaR > 1) {
       const corona = cx.createRadialGradient(px, py, r * 0.5, px, py, coronaR);
-      corona.addColorStop(0, `rgba(240,190,80,${(0.18 * gl * this.alpha).toFixed(3)})`);
-      corona.addColorStop(1, 'rgba(240,190,80,0)');
+      corona.addColorStop(0, `rgba(${c2},${(0.18 * gl * this.alpha).toFixed(3)})`);
+      corona.addColorStop(1, `rgba(${c2},0)`);
       cx.fillStyle = corona;
       cx.beginPath(); cx.arc(px, py, coronaR, 0, Math.PI * 2); cx.fill();
     }
 
-    // ── Blurry expansion layer — only visible when expanded ──
+    // ── Blurry expansion layer ──
     if (bl > 0.5) {
       cx.filter = `blur(${bl.toFixed(1)}px)`;
       const expandR = r * 1.4;
       const expGrad = cx.createRadialGradient(px, py, 0, px, py, expandR);
-      expGrad.addColorStop(0, `rgba(255,220,140,${(0.55 * this.alpha).toFixed(3)})`);
-      expGrad.addColorStop(0.5, `rgba(240,190,80,${(0.25 * this.alpha).toFixed(3)})`);
-      expGrad.addColorStop(1, 'rgba(240,190,80,0)');
+      expGrad.addColorStop(0, `rgba(${c1},${(0.55 * this.alpha).toFixed(3)})`);
+      expGrad.addColorStop(0.5, `rgba(${c2},${(0.25 * this.alpha).toFixed(3)})`);
+      expGrad.addColorStop(1, `rgba(${c2},0)`);
       cx.fillStyle = expGrad;
       cx.beginPath(); cx.arc(px, py, expandR, 0, Math.PI * 2); cx.fill();
       cx.filter = 'none';
     }
 
-    // ── Inner glow — intense on collapse ──
+    // ── Inner glow ──
     const innerR = r * 1.8 + (1 - bl / 18) * 30 * gl;
     const innerGrad = cx.createRadialGradient(px, py, 0, px, py, innerR);
-    innerGrad.addColorStop(0, `rgba(255,240,180,${(0.85 * gl * this.alpha * flicker).toFixed(3)})`);
-    innerGrad.addColorStop(0.4, `rgba(255,200,100,${(0.4 * gl * this.alpha).toFixed(3)})`);
-    innerGrad.addColorStop(1, 'rgba(240,190,80,0)');
+    innerGrad.addColorStop(0, `rgba(${c4},${(0.85 * gl * this.alpha * flicker).toFixed(3)})`);
+    innerGrad.addColorStop(0.4, `rgba(${c2},${(0.4 * gl * this.alpha).toFixed(3)})`);
+    innerGrad.addColorStop(1, `rgba(${c2},0)`);
     cx.fillStyle = innerGrad;
     cx.beginPath(); cx.arc(px, py, innerR, 0, Math.PI * 2); cx.fill();
 
-    // ── Hard core — only when collapsed (small radius) ──
+    // ── Hard core ──
     const coreAlpha = Math.max(0, 1 - bl / 10) * this.alpha;
     if (coreAlpha > 0.01 && r > 0.1) {
       cx.globalAlpha = coreAlpha * flicker;
-      cx.fillStyle = 'rgba(255,250,230,1)';
+      cx.fillStyle = `rgba(${c4},1)`;
       cx.beginPath(); cx.arc(px, py, r, 0, Math.PI * 2); cx.fill();
-      // Hot centre dot
       cx.globalAlpha = coreAlpha;
       cx.fillStyle = 'rgba(255,255,255,1)';
       cx.beginPath(); cx.arc(px, py, r * 0.4, 0, Math.PI * 2); cx.fill();
@@ -397,27 +398,23 @@ class BreathOrb {
     cx.globalAlpha = 1;
     cx.restore();
 
-    // ── State word — drawn centred in orb, fades over 3 cycles ──
+    // ── State word ──
     if (this.wordText && this.wordAlpha > 0.01) {
       const wordA = this.wordAlpha * this.alpha;
-      // Blur: breath 1 = very blurry (dream), breath 2 = soft, breath 3 = sharp
       const cycleBlurFactor = Math.max(0, 1 - this.cycleCount * 0.45);
       const wordBlur = bl * 0.2 + cycleBlurFactor * 10;
       cx.save();
       if (wordBlur > 0.5) cx.filter = `blur(${wordBlur.toFixed(1)}px)`;
       cx.globalAlpha = wordA;
-      // Big — 16% of screen width, scale contracts during morph
       const baseFontSize = Math.max(28, Math.min(72, innerWidth * 0.16));
       const fontSize = baseFontSize * (this.wordScale !== undefined ? this.wordScale : 1);
       if (fontSize < 2) { cx.restore(); return; }
       cx.font = `300 ${fontSize.toFixed(1)}px 'Cormorant Garamond', Georgia, serif`;
       cx.textAlign = 'center';
       cx.textBaseline = 'middle';
-      // Glow intensifies each cycle
       const glowStrength = 0.4 + this.cycleCount * 0.25;
-      cx.shadowColor = `rgba(240,210,140,${(wordA * glowStrength).toFixed(2)})`;
+      cx.shadowColor = `rgba(${c5},${(wordA * glowStrength).toFixed(2)})`;
       cx.shadowBlur = 18 + this.cycleCount * 12;
-      // Colour brightens each cycle: cycle 1 = dim, 3 = crystalline
       const brightness = 180 + this.cycleCount * 25;
       cx.fillStyle = `rgba(${brightness+15},${brightness},${brightness-40},${wordA.toFixed(3)})`;
       cx.fillText(this.wordText, px, py);
@@ -634,7 +631,6 @@ function loop() {
     }
     if (breathOrb && currentMode === 'collapse') {
       breathOrb.update(); breathOrb.draw();
-      // ── Breath arc ring — visual inhale/exhale, replaces text labels ──
       const isInhale = breathOrb.phase === 'inhale' || breathOrb.phase === 'hold';
       const isExhale = breathOrb.phase === 'exhale';
       if (isInhale || isExhale) {
@@ -653,6 +649,10 @@ function loop() {
         cx.stroke();
         cx.restore();
       }
+    }
+    // Witness violet breath orb — drawn on same canvas
+    if (window._decOrb && (currentMode === 'witness' || currentMode === 'decohere')) {
+      window._decOrb.update(); window._decOrb.draw();
     }
   } catch(e) { console.warn('loop err:', e); }
   requestAnimationFrame(loop);
@@ -1474,12 +1474,13 @@ function startObserve() {
   affirmBonus = 0; clarityLevel = 0; isStill = true; lastAffirmTime = 0;
   if (obsMode === 'kasina') {
     kasinaParticle = new KasinaParticle(); kasinaParticle.targetAlpha = 0;
-    observeParticle = null;
+    observeParticle = null; particleVisible = true;
+  } else if (obsMode === 'noting') {
+    observeParticle = null; kasinaParticle = null; particleVisible = false;
   } else {
     observeParticle = new ObsParticle(); observeParticle.targetAlpha = 0;
-    kasinaParticle = null;
+    kasinaParticle = null; particleVisible = true;
   }
-  particleVisible = true;
   buildObsSetupScreen();
   showScreen('s-observe');
 }
@@ -1687,6 +1688,8 @@ function enterObserve() {
       if (obsStorm) {
         // Storm + noting — go straight to storm screen
         buildObsScreen();
+        const obsScr = document.getElementById('s-observe');
+        if (obsScr) { obsScr.style.transition = 'none'; obsScr.style.opacity = '1'; }
         obsTimerEnd = Date.now() + obsMinutes * 60 * 1000;
         startObsTimer();
         startStormScreen();
@@ -1698,6 +1701,9 @@ function enterObserve() {
     }
 
     buildObsScreen();
+    // Reset any opacity from setup screen fade
+    const obsScr = document.getElementById('s-observe');
+    if (obsScr) { obsScr.style.transition = 'none'; obsScr.style.opacity = '1'; }
     // [UX1] Re-assert after buildObsScreen() — innerHTML rebuild doesn't touch chrome
     showBackBtn();
     document.getElementById('backBtn').onclick = () => goHome();
@@ -2409,9 +2415,9 @@ function showCollapseStage(n) {
     el.style.cssText = 'opacity:0;pointer-events:none;transition:none;visibility:hidden;';
     el.classList.add('on');
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      el.style.visibility = 'visible'; el.style.transition = 'opacity 0.9s ease';
+      el.style.visibility = 'visible'; el.style.transition = 'opacity 1.4s ease';
       el.style.opacity = '1'; el.style.pointerEvents = 'all';
-      setTimeout(() => { el.style.cssText = ''; }, 950);
+      setTimeout(() => { el.style.cssText = ''; }, 1450);
     }));
     const tapEl = document.getElementById('tapNext');
     tapEl.style.transition = 'opacity 0.7s ease';
@@ -2428,13 +2434,13 @@ function showCollapseStage(n) {
     }
   };
   if (current) {
-    isTransitioning = true; // [TECH3]
-    current.style.transition = 'opacity 0.7s ease'; current.style.opacity = '0'; current.style.pointerEvents = 'none';
+    isTransitioning = true;
+    current.style.transition = 'opacity 1s ease'; current.style.opacity = '0'; current.style.pointerEvents = 'none';
     setTimeout(() => {
       current.classList.remove('on'); current.style.cssText='opacity:0;visibility:hidden;display:none;';
-      isTransitioning = false; // [TECH3]
+      isTransitioning = false;
       reveal();
-    }, 750);
+    }, 1050);
   } else reveal();
 }
 document.getElementById('s-collapse').addEventListener('click', e => {
@@ -2458,6 +2464,8 @@ function bDelay(fn,ms){ const t=setTimeout(fn,ms); breathTimers.push(t); return 
 function clearAllBreath(){
   breathTimers.forEach(clearTimeout); breathTimers=[]; breathRunning=false;
   breathOrb = null;
+  const sw = document.getElementById('breath-state-word');
+  if (sw && sw.parentNode) sw.parentNode.removeChild(sw);
   // Ensure DOM bp is hidden (legacy safety)
   const bp = document.getElementById('bp'); if (bp) { bp.style.opacity='0'; bp.className='bp neutral'; }
   const rp = document.getElementById('bripple'); if (rp) rp.className='bripple';
@@ -2500,9 +2508,27 @@ function startBreath() {
   // Create BreathOrb at chosen particle position, moves to centre
   breathOrb = new BreathOrb(startX, startY);
   breathOrb.targetX = innerWidth * 0.5;
-  breathOrb.targetY = innerHeight * 0.57;
-  breathOrb.wordText = stateName;
-  breathOrb.wordTargetAlpha = 0; // starts hidden, revealed on first inhale
+  breathOrb.targetY = innerHeight * 0.5;
+  breathOrb.wordText = ''; // no word inside orb — kept separate below
+  breathOrb.wordTargetAlpha = 0;
+
+  // State word shown BELOW the orb as a DOM element, fades over cycles
+  let stateWordEl = document.getElementById('breath-state-word');
+  if (!stateWordEl) {
+    stateWordEl = document.createElement('div');
+    stateWordEl.id = 'breath-state-word';
+    stateWordEl.style.cssText = `position:fixed;left:50%;transform:translateX(-50%);
+      font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-weight:300;
+      font-size:clamp(28px,8vw,44px);letter-spacing:.04em;
+      color:rgba(240,204,136,.75);text-align:center;
+      pointer-events:none;z-index:25;opacity:0;
+      transition:opacity 2s ease, color 2s ease;white-space:nowrap;`;
+    document.body.appendChild(stateWordEl);
+  }
+  stateWordEl.textContent = stateName;
+  // Position below orb
+  stateWordEl.style.top = (innerHeight * 0.5 + 72) + 'px';
+  bDelay(() => { stateWordEl.style.opacity = '1'; }, 7200);
 
   function showText(text, cls, delayMs) {
     bDelay(() => {
@@ -2527,17 +2553,17 @@ function startBreath() {
   bDelay(() => {
     btext.className = 'btext intro';
     btext.textContent = inviteLine1;
-    btext.style.transition = 'opacity 1.8s ease'; btext.style.opacity = '1';
-  }, 400);
+    btext.style.transition = 'opacity 2.5s ease'; btext.style.opacity = '1';
+  }, 800);
   bDelay(() => {
-    btext.style.transition = 'opacity 0.9s ease'; btext.style.opacity = '0';
+    btext.style.transition = 'opacity 1.2s ease'; btext.style.opacity = '0';
     bDelay(() => {
       btext.className = 'btext intro-gold';
       btext.textContent = inviteLine2;
-      btext.style.transition = 'opacity 1.8s ease'; btext.style.opacity = '1';
-    }, 950);
-  }, 3400);
-  hideText(6500);
+      btext.style.transition = 'opacity 2.5s ease'; btext.style.opacity = '1';
+    }, 1200);
+  }, 5000);
+  hideText(9000);
 
   // ── Wire up BreathOrb phase changes to text labels ──
   const INHALE = breathOrb.INHALE, HOLD = breathOrb.HOLD, EXHALE = breathOrb.EXHALE, REST = breathOrb.REST;
@@ -2579,6 +2605,9 @@ function startBreath() {
   breathOrb.onCyclesDone = () => {
     breathRunning = false;
     btext.style.transition = 'opacity 0.9s ease'; btext.style.opacity = '0';
+    // Fade state word below orb
+    const sw = document.getElementById('breath-state-word');
+    if (sw) { sw.style.transition = 'opacity 1.2s ease'; sw.style.opacity = '0'; setTimeout(() => { if(sw.parentNode) sw.parentNode.removeChild(sw); }, 1300); }
 
     // Hold crystallised for 800ms so user sees the bright point, then morph
     setTimeout(() => {
@@ -2890,7 +2919,9 @@ function startDecohere() {
 function buildShadowGrid() {
   const grid = document.getElementById('shadowGrid');
   grid.innerHTML = '';
-  grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;';
+  grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
+    'align-content:center;justify-content:center;gap:clamp(8px,2.5vw,16px);' +
+    'padding:0 clamp(16px,5vw,32px);';
 
   const en = SHADOW_STATES.en, es = SHADOW_STATES.es;
 
@@ -2903,7 +2934,8 @@ function buildShadowGrid() {
 
     const o = document.createElement('button');
     o.className = 'shadow-orb';
-    o.style.cssText = `opacity:0;transition:opacity 1.2s ease, color .3s ease, background .3s ease;`;
+    o.style.opacity = '0';
+    o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
     o.textContent = displayName;
 
     setTimeout(() => { o.style.opacity = '1'; }, 80 * i + 200);
@@ -2912,11 +2944,15 @@ function buildShadowGrid() {
       if (audioCtx) playTap();
       decStateName = name; decStateNameES = es[i];
       grid.querySelectorAll('.shadow-orb').forEach(el => {
-        el.style.transition = 'opacity 0.5s ease, color 0.5s ease, background 0.5s ease';
+        el.style.transition = 'opacity 0.5s ease, color 0.5s ease, border-color 0.5s ease';
         el.style.opacity = el === o ? '1' : '0.06';
-        if (el === o) { el.style.color = 'rgba(255,155,130,1)'; el.style.background = 'rgba(210,100,80,.10)'; }
+        if (el === o) {
+          el.style.color = 'rgba(240,204,136,1)';
+          el.style.borderColor = 'rgba(201,169,110,.85)';
+          el.style.background = 'rgba(201,169,110,.10)';
+        }
       });
-      setTimeout(() => showDecBodyMap(), 650);
+      setTimeout(() => showDecBodyMap(), 700);
     };
     o.addEventListener('click', go);
     o.addEventListener('touchend', e => { e.preventDefault(); go(); });
@@ -3781,10 +3817,12 @@ function startDecAcknowledge() {
   const bp          = document.getElementById('dec-bp');
 
   [ackLayer, breathLayer, wordEl, btext, bp].forEach(el => {
-    if (el) { el.style.transition = 'none'; el.style.opacity = '0'; }
+    if (el) { el.style.transition = 'none'; el.style.opacity = '0'; el.style.pointerEvents = 'none'; }
   });
   const wordOrb = document.getElementById('dec-word-orb');
   if (wordOrb) { wordOrb.style.transition = 'none'; wordOrb.style.opacity = '0'; wordOrb.textContent = ''; }
+  // Clear any lingering dec breath timers
+  clearAllDec();
 
   wordEl.innerHTML = '';
   displayName.split('').forEach(ch => {
@@ -3869,40 +3907,61 @@ function startDecBreath(displayName) {
   const t = TRANSLATIONS[lang];
   const ackLayer    = document.getElementById('dec-ack-layer');
   const breathLayer = document.getElementById('dec-breath-layer');
-  const wordEl      = document.getElementById('dec-word');   // ack layer only
-  const wordOrb     = document.getElementById('dec-word-orb'); // lives inside orb
   const btext       = document.getElementById('dec-btext');
-  const bp          = document.getElementById('dec-bp');
   const bdots       = document.getElementById('dec-bdots');
 
-  // Populate the orb word element
-  if (wordOrb) {
-    wordOrb.textContent = displayName;
-    wordOrb.style.opacity = '0';
-    wordOrb.style.transition = 'opacity 1.5s ease, text-shadow 2s ease, color 2s ease';
-  }
-
-  // bdots below orb — fixed bottom
-  if (bdots) { bdots.style.top = 'auto'; bdots.style.bottom = 'clamp(80px,14vh,120px)'; }
-
-  const backBtn = document.getElementById('backBtn');
-  if (backBtn) {
-    backBtn.style.opacity = '1';
-    backBtn.style.pointerEvents = 'all';
-    backBtn.onclick = () => startDecohere();
-  }
-
+  // Hide ack layer, reveal breath layer (just for btext + dots — orb is on canvas)
   ackLayer.style.transition = 'opacity 1.2s ease';
   ackLayer.style.opacity = '0';
   setTimeout(() => { ackLayer.style.pointerEvents = 'none'; }, 1200);
 
   breathLayer.style.transition = 'opacity 1.2s ease';
-  setTimeout(() => {
-    breathLayer.style.opacity = '1';
-    breathLayer.style.pointerEvents = 'all';
-    if (bp) { bp.style.transition = 'opacity 1.2s ease'; bp.style.opacity = '1'; }
-    if (wordOrb) { wordOrb.style.transition = 'opacity 1.8s ease'; wordOrb.style.opacity = '0.55'; }
-  }, 400);
+  setTimeout(() => { breathLayer.style.opacity = '1'; breathLayer.style.pointerEvents = 'all'; }, 400);
+
+  // Hide legacy CSS dec-bp so it doesn't interfere
+  const bp = document.getElementById('dec-bp');
+  if (bp) { bp.style.display = 'none'; }
+  const wordOrb = document.getElementById('dec-word-orb');
+  if (wordOrb) { wordOrb.style.display = 'none'; }
+
+  // bdots
+  if (bdots) { bdots.style.top = 'auto'; bdots.style.bottom = 'clamp(80px,14vh,120px)'; }
+
+  const backBtn = document.getElementById('backBtn');
+  if (backBtn) { backBtn.style.opacity='1'; backBtn.style.pointerEvents='all'; backBtn.onclick = () => startDecohere(); }
+
+  // ── Violet BreathOrb on the shared canvas ──
+  const decOrb = new BreathOrb(innerWidth * 0.5, innerHeight * 0.5, 'violet');
+  decOrb.maxCycles = 3;
+  // Word shown below orb — separate DOM element
+  let decWordEl = document.getElementById('dec-state-word');
+  if (!decWordEl) {
+    decWordEl = document.createElement('div');
+    decWordEl.id = 'dec-state-word';
+    decWordEl.style.cssText = `position:fixed;left:50%;transform:translateX(-50%);
+      font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-weight:300;
+      font-size:clamp(26px,7vw,40px);letter-spacing:.06em;
+      color:rgba(200,170,235,.75);text-align:center;
+      pointer-events:none;z-index:25;opacity:0;
+      transition:opacity 2.2s ease, color 2.2s ease;white-space:nowrap;`;
+    document.body.appendChild(decWordEl);
+  }
+  decWordEl.textContent = displayName;
+  decWordEl.style.top = (innerHeight * 0.5 + 78) + 'px';
+  // Fade in at first inhale
+  decOrb.onPhaseChange = (phase) => {
+    if (phase === 'inhale' && decOrb.cycleCount === 0) {
+      setTimeout(() => { if (decWordEl) decWordEl.style.opacity = '1'; }, 600);
+    }
+    if (phase === 'exhale') {
+      // Dim word on exhale
+      const a = Math.max(0.18, 0.75 - decOrb.cycleCount * 0.2);
+      if (decWordEl) { decWordEl.style.opacity = a.toFixed(2); decWordEl.style.color = `rgba(180,150,215,${a.toFixed(2)})`; }
+    }
+  };
+
+  // Register orb so render loop draws it (stored alongside breathOrb)
+  window._decOrb = decOrb;
 
   let cycle = 0;
   const decTimers = [];
@@ -3912,159 +3971,63 @@ function startDecBreath(displayName) {
     if (!btext) return;
     const isVisible = parseFloat(btext.style.opacity||'0') > 0.05;
     if (isVisible) {
-      btext.style.transition = 'opacity 0.5s ease';
-      btext.style.opacity = '0';
-      const id = setTimeout(() => {
-        btext.textContent = txt;
-        btext.style.transition = 'opacity 1s ease';
-        btext.style.opacity = '1';
-      }, 550);
+      btext.style.transition = 'opacity 0.5s ease'; btext.style.opacity = '0';
+      const id = setTimeout(() => { btext.textContent = txt; btext.style.transition = 'opacity 1.2s ease'; btext.style.opacity = '1'; }, 550);
       decBreathTimers.push(id);
     } else {
-      btext.textContent = txt;
-      btext.style.transition = 'opacity 1.2s ease';
-      btext.style.opacity = '1';
+      btext.textContent = txt; btext.style.transition = 'opacity 1.4s ease'; btext.style.opacity = '1';
     }
   }
-  function hideBtext() {
-    if (!btext) return;
-    btext.style.transition = 'opacity 0.8s ease';
-    btext.style.opacity = '0';
-  }
-
-  function fireRipple(idx) {
-    const rip = document.getElementById('dec-rip'+idx);
-    if (!rip) return;
-    rip.classList.remove('go');
-    void rip.offsetWidth;
-    rip.classList.add('go');
-  }
+  function hideBtext() { if (!btext) return; btext.style.transition = 'opacity 0.8s ease'; btext.style.opacity = '0'; }
 
   function dronePitch(up) {
     if (!droneNodes.length) return;
-    droneNodes.forEach(n => {
-      if (n.frequency) {
-        const base = n.frequency.value;
-        n.frequency.setTargetAtTime(up ? base*1.018 : base/1.018, audioCtx.currentTime, 2);
-      }
-    });
+    droneNodes.forEach(n => { if (n.frequency) { const base = n.frequency.value; n.frequency.setTargetAtTime(up ? base*1.018 : base/1.018, audioCtx.currentTime, 2); } });
   }
 
   function runCycle() {
     if (cycle >= 3) {
-      if (backBtn) {
-        backBtn.style.opacity = '1';
-        backBtn.style.pointerEvents = 'all';
-        backBtn.onclick = () => goHome();
-      }
-
+      if (backBtn) { backBtn.style.opacity='1'; backBtn.style.pointerEvents='all'; backBtn.onclick = () => goHome(); }
       dDelay(() => {
         hideBtext();
-        // Scatter the orb word on completion
-        if (wordOrb) {
-          wordOrb.style.transition = 'opacity 1.5s ease, transform 1.5s ease, filter 1.5s ease';
-          wordOrb.style.opacity = '0';
-          wordOrb.style.transform = `translate(${(Math.random()-0.5)*60}px,${(Math.random()-0.5)*40-15}px) rotate(${(Math.random()-0.5)*20}deg)`;
-          wordOrb.style.filter = 'blur(10px)';
-        }
-        if (bp) {
-          bp.style.transition = 'transform 1.2s cubic-bezier(.4,0,.2,1),opacity 1.8s ease,background 1.2s ease,box-shadow 1.2s ease';
-          bp.style.transform = 'scale(4)';
-          // [AE5] deep gold, not warm-white
-          bp.style.background = 'rgba(240,190,60,.85)';
-          bp.style.boxShadow = '0 0 40px rgba(240,190,60,.7)';
-        }
+        // Scatter the word
+        if (decWordEl) { decWordEl.style.transition = 'opacity 1.5s ease, transform 1.5s ease, filter 1.5s ease'; decWordEl.style.opacity = '0'; decWordEl.style.filter = 'blur(10px)'; decWordEl.style.transform = 'translateX(-50%) translateY(-20px)'; }
+        // Crystallise the orb
+        if (window._decOrb) { window._decOrb.startPhase('crystallised'); }
         playDecohereRelease();
       }, 400);
-
       dDelay(() => {
-        if (bp) {
-          bp.style.transition = 'transform 3s cubic-bezier(.4,0,.2,1),opacity 3s ease,background 3s ease,box-shadow 3s ease';
-          bp.style.transform = 'scale(0.5)';
-          bp.style.opacity = '0.35';
-          bp.style.background = 'rgba(201,169,110,.6)';
-          bp.style.boxShadow = '0 0 8px rgba(201,169,110,.3)';
-        }
-      }, 1800);
-
-      dDelay(() => showDecEnd(), 5500);
+        if (window._decOrb) { window._decOrb.alpha = 0; window._decOrb = null; }
+        if (decWordEl && decWordEl.parentNode) decWordEl.parentNode.removeChild(decWordEl);
+      }, 3200);
+      dDelay(() => showDecEnd(), 5000);
       return;
     }
     cycle++;
-    if (!bp) return;
 
     const inhaleText = t.decInhale;
     const exhaleText = t.decExhale;
-
     setBtext(inhaleText);
 
-    dDelay(() => {
-      const maxScale = 5 + cycle * 2;
-      const r = 190 + cycle * 16, g = 178 + cycle * 10, bl = 150 - cycle * 12;
-      const glowStr = 0.25 + cycle * 0.18;
-      bp.style.transition =
-        'transform 4s cubic-bezier(.35,0,.15,1),' +
-        'filter 4s ease,' +
-        'background 3.5s ease,' +
-        'box-shadow 3.5s ease';
-      bp.style.transform = `scale(${maxScale})`;
-      bp.style.filter = `blur(${3 + cycle * 1.5}px)`;
-      bp.style.background = `rgba(${r},${g},${bl},0.65)`;
-      bp.style.boxShadow = `0 0 ${30+cycle*20}px rgba(${r},${g},${bl},${glowStr})`;
-      // Word glows on inhale — brightens, gains text-shadow
-      if (wordOrb) {
-        const wAlpha = Math.min(0.95, 0.55 + cycle * 0.15);
-        wordOrb.style.transition = 'opacity 2s ease, text-shadow 2s ease, color 2s ease';
-        wordOrb.style.opacity = wAlpha.toFixed(2);
-        wordOrb.style.color = `rgba(240,215,170,${wAlpha.toFixed(2)})`;
-        wordOrb.style.textShadow = `0 0 ${20+cycle*12}px rgba(240,210,140,${(0.4+cycle*0.15).toFixed(2)})`;
-      }
-      dronePitch(true);
-    }, 100);
-
-    dDelay(() => {
-      const nudge = 5 + cycle * 2 + 0.8;
-      bp.style.transition = 'transform 2s cubic-bezier(.4,0,.2,1)';
-      bp.style.transform = `scale(${nudge})`;
-    }, 2200);
-
+    // Drive orb phase manually to sync with our timers
+    dDelay(() => { if (window._decOrb) window._decOrb.startPhase('inhale'); dronePitch(true); }, 100);
+    dDelay(() => { if (window._decOrb) window._decOrb.startPhase('hold'); }, 4700);
     dDelay(() => {
       setBtext(exhaleText);
       if (navigator.vibrate) navigator.vibrate(22);
-      fireRipple(cycle - 1);
       dronePitch(false);
-      bp.style.transition =
-        'transform 4.5s cubic-bezier(.4,0,.2,1),' +
-        'filter 4s ease,' +
-        'background 3s ease,' +
-        'box-shadow 3s ease';
-      bp.style.transform = 'scale(1)';
-      bp.style.filter = 'blur(0px)';
-      // [AE5] exhale residual — warm gold tones
-      const residR = 200 + cycle * 12, residG = 175 + cycle * 6, residB = 80 - cycle * 8;
-      bp.style.background = `rgba(${residR},${Math.min(255,residG)},${Math.max(0,residB)},${0.45 + cycle*0.1})`;
-      bp.style.boxShadow = `0 0 ${10+cycle*6}px rgba(${residR},${Math.min(255,residG)},${Math.max(0,residB)},${0.2+cycle*0.08})`;
-
-      // Word dims on exhale — fades, loses glow
-      if (wordOrb) {
-        const wAlpha = Math.max(0.15, 0.45 - cycle * 0.12);
-        wordOrb.style.transition = 'opacity 3s ease, text-shadow 3s ease, color 3s ease';
-        wordOrb.style.opacity = wAlpha.toFixed(2);
-        wordOrb.style.color = `rgba(180,175,165,${wAlpha.toFixed(2)})`;
-        wordOrb.style.textShadow = '0 0 8px rgba(180,175,165,.12)';
-      }
-    }, 4400);
+      if (window._decOrb) window._decOrb.startPhase('exhale');
+    }, 6400);
 
     dDelay(() => {
       const dot = document.getElementById('dec-dot'+(cycle-1));
       if (dot) dot.classList.add('done');
-    }, 8800);
-
-    dDelay(() => { hideBtext(); }, 8000);
-    dDelay(runCycle, 10200);
+    }, 11500);
+    dDelay(() => { hideBtext(); }, 10800);
+    dDelay(runCycle, 12400);
   }
 
-  dDelay(runCycle, 800);
+  dDelay(runCycle, 1200);
 }
 
 function showDecEnd() {
@@ -4114,7 +4077,12 @@ function showDecEnd() {
   });
 }
 
-function clearAllDec() { decBreathTimers.forEach(clearTimeout); decBreathTimers = []; }
+function clearAllDec() {
+  decBreathTimers.forEach(clearTimeout); decBreathTimers = [];
+  if (window._decOrb) { window._decOrb = null; }
+  const dw = document.getElementById('dec-state-word');
+  if (dw && dw.parentNode) dw.parentNode.removeChild(dw);
+}
 
 // ── WELCOME INTRO ──
 let wlcStep = 0;

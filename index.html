@@ -381,19 +381,20 @@ html,body { margin:0;padding:0;width:100%;height:100%;background:var(--bg);
 .dec-line{font-size:var(--fh);color:var(--cream-dim);line-height:1.55;max-width:300px;font-weight:300;}
 .dec-sub{font-size:var(--fs);color:var(--cream-ghost);letter-spacing:.04em;margin-bottom:8px;}
 .shadow-grid{position:relative;width:100%;flex:1;min-height:340px;max-height:60vh;}
-/* Shadow grid — ordered Collapse-style list, reddish tone */
-.shadow-orb{position:static;display:block;width:100%;max-width:320px;
-  padding:clamp(13px,3.5vw,18px) clamp(20px,5vw,32px);
-  cursor:pointer;background:none;
-  border:none;border-bottom:1px solid rgba(210,100,80,.12);
+/* Shadow grid — matches Collapse field style */
+.shadow-orb{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:clamp(10px,2.8vw,16px) clamp(16px,4vw,28px);
+  cursor:pointer;background:rgba(201,169,110,.06);
+  border:1px solid rgba(201,169,110,.28);border-radius:40px;
   -webkit-tap-highlight-color:transparent;touch-action:manipulation;
-  letter-spacing:.06em;text-align:left;
-  font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-weight:400;
-  font-size:clamp(20px,5.5vw,26px);
-  color:rgba(210,110,100,.82);
-  transition:color .3s ease, background .3s ease, opacity .4s ease;}
-.shadow-orb:first-child{border-top:1px solid rgba(210,100,80,.12);}
-.shadow-orb:active{color:rgba(255,155,130,1);background:rgba(210,100,80,.08);}
+  letter-spacing:.06em;text-align:center;
+  font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;
+  font-size:clamp(18px,5vw,24px);
+  color:rgba(240,204,136,.82);
+  transition:color .3s ease, border-color .3s ease, background .3s ease, opacity .4s ease;}
+.shadow-orb:active{color:rgba(240,204,136,1);border-color:rgba(201,169,110,.85);
+  background:rgba(201,169,110,.12);}
 
 /* Witness breath */
 #s-dec-breath{gap:0;text-align:center;cursor:default;overflow:hidden;}
