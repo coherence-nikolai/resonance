@@ -746,7 +746,7 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
 
 <div id="chrome">
   <button class="chrome-btn" id="backBtn" onclick="goHome()" style="opacity:0;pointer-events:none;">←</button>
-  <button class="chrome-btn" id="langToggleBtn" onclick="toggleLang()" style="font-size:clamp(10px,2.5vw,13px);letter-spacing:.18em;opacity:0.38;padding:8px 4px;"></button>
+  <button class="chrome-btn" id="langToggleBtn" onclick="toggleLang()" style="display:none;"></button>
   <button class="chrome-btn" id="settingsBtn" onclick="toggleSettings()">⚙</button>
 </div>
 
@@ -804,6 +804,11 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
   <div class="obs-count-home" id="homeCount"></div>
   <button id="revisitHomeBtn" onclick="revisitIntro()">revisit introduction</button>
   <div id="guided-hint" onclick="revisitIntro()"></div>
+  <button id="homeLangBtn" onclick="toggleLang()" style="
+    background:none;border:none;font-size:clamp(10px,2.5vw,12px);letter-spacing:.2em;
+    color:rgba(240,230,208,.22);cursor:pointer;padding:8px 16px;margin-top:4px;
+    font-family:inherit;-webkit-tap-highlight-color:transparent;
+    transition:color .3s ease;text-transform:uppercase;"></button>
 </div>
 
 <div class="screen" id="s-observe"></div>

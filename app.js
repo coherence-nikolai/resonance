@@ -23,7 +23,13 @@
 // ═══════════════════════════════════════
 
 // ── STATE ──
-let lang = localStorage.getItem('field_lang') || 'en';
+let lang = (() => {
+  const stored = localStorage.getItem('field_lang');
+  if (stored) return stored;
+  // Auto-detect: default to Spanish for Spanish-speaking devices
+  const nav = (navigator.language || navigator.userLanguage || '').toLowerCase();
+  return nav.startsWith('es') ? 'es' : 'en';
+})();
 let audioCtx = null, droneNodes = [], breathTimers = [], decBreathTimers = [];
 let breathRunning = false, breathCycle = 0, curStateName = '', spChosen = 0;
 let breathOrb = null; // canvas-driven breath orb
@@ -433,112 +439,179 @@ class KasinaParticle {
   constructor() {
     this.x = innerWidth * 0.5;
     this.y = innerHeight * 0.5;
-    this.r = 9;
+    this.r = 6;
     this.alpha = 0; this.targetAlpha = 1;
     this.breathPh = 0;
     this.shudderX = 0; this.shudderY = 0;
     this.pulsePh = 0;
     this.shudderPh = 0;
-    this.rayPh = 0;       // slow ray rotation
-    this.flickPh = 0;     // fast micro-flicker
+    this.rayPh = 0;
+    this.flickPh = 0;
     this.NUM_RAYS = 8;
+
+    // Evolution state — 0 (diffuse) to 7 (crystallised)
+    this.stage = 0;
+    this.maxStage = 7;
+    this.crystallinity = 0;      // 0→1 smooth lerp target
+    this.crystallinityDisp = 0;  // displayed value, lerps toward crystallinity
+    this.pulseRipples = [];      // tap ripple rings
+    this.lastTapTime = 0;
   }
+
+  // Called on each "I am here" tap
+  evolve() {
+    if (this.stage >= this.maxStage) return false; // already done
+    this.stage++;
+    this.crystallinity = this.stage / this.maxStage;
+    this.lastTapTime = performance.now();
+    // Add crystallisation ripple
+    this.pulseRipples.push({ r: 10, alpha: 0.9, speed: 3.2 });
+    if (navigator.vibrate) navigator.vibrate(stage => [12, 18, 22, 26, 30, 36, 44][Math.min(this.stage-1,6)]);
+    return this.stage >= this.maxStage; // true = complete
+  }
+
   update() {
     this.breathPh  += 0.016;
     this.pulsePh   += 0.08;
     this.shudderPh += 0.28;
-    this.rayPh     += 0.004;   // very slow rotation
-    this.flickPh   += 0.35;    // fast inner flicker
+    this.rayPh     += 0.003 + this.crystallinityDisp * 0.005; // rays spin faster as crystallised
+    this.flickPh   += 0.35;
 
-    const shudderAmp = isStill
+    // Shudder reduces as crystallinity increases — becomes perfectly still when done
+    const baseShudder = isStill
       ? 0.6 + 0.9 * Math.sin(this.shudderPh) * Math.cos(this.shudderPh * 1.7)
       : 2.5 + 5 * Math.random();
-    this.shudderX = (Math.random() - 0.5) * shudderAmp;
-    this.shudderY = (Math.random() - 0.5) * shudderAmp;
+    const shudderFactor = 1 - this.crystallinityDisp * 0.92;
+    this.shudderX = (Math.random() - 0.5) * baseShudder * shudderFactor;
+    this.shudderY = (Math.random() - 0.5) * baseShudder * shudderFactor;
     this.alpha += (this.targetAlpha - this.alpha) * 0.025;
+
+    // Smooth crystallinity toward target
+    this.crystallinityDisp += (this.crystallinity - this.crystallinityDisp) * 0.04;
+
+    // Age ripples
+    this.pulseRipples = this.pulseRipples.filter(rp => {
+      rp.r += rp.speed; rp.alpha -= 0.015; return rp.alpha > 0;
+    });
   }
+
   draw() {
     if (this.alpha < 0.01) return;
+    const c = this.crystallinityDisp; // 0=diffuse, 1=crystallised
     const px = this.x + this.shudderX;
     const py = this.y + this.shudderY;
-    const breathFactor = 0.68 + 0.32 * Math.sin(this.breathPh);
-    const microPulse   = 1 + 0.07 * Math.sin(this.pulsePh);
+
+    // Breath is dampened as crystallinity increases — stillness
+    const breathAmp = 0.32 * (1 - c * 0.75);
+    const breathFactor = 0.68 + breathAmp * Math.sin(this.breathPh);
+    const microPulse   = 1 + (0.07 - c * 0.05) * Math.sin(this.pulsePh);
     const flicker      = 0.88 + 0.12 * Math.sin(this.flickPh);
-    const cl = Math.max(clarityLevel, 0.15); // minimum presence even at zero clarity
 
-    // Core radius
-    const r = (this.r + cl * 5) * microPulse;
+    // Core grows and sharpens with crystallinity
+    const r = (6 + c * 10) * microPulse;
 
-    // Glow layers — three concentric halos
-    const g1 = (18 + cl * 28) * breathFactor;   // inner
-    const g2 = (55 + cl * 90) * breathFactor;   // mid
-    const g3 = (120 + cl * 160) * breathFactor; // corona
+    // Glow halos: at c=0 very large/blurry, at c=1 tight and bright
+    const blurScale  = 1 - c * 0.65;  // blur reduces
+    const glowScale  = 0.3 + c * 0.7; // glow intensity increases
+    const g1 = (22 + c * 18) * breathFactor * blurScale;   // inner
+    const g2 = (80 - c * 30) * breathFactor * blurScale;   // mid
+    const g3 = (160 - c * 80) * breathFactor * blurScale;  // corona
 
     cx.save();
 
-    // ── Corona (outermost, very soft) ──
-    const corona = cx.createRadialGradient(px, py, g2 * 0.5, px, py, g3);
-    corona.addColorStop(0, `rgba(240,190,80,${(0.06 * this.alpha * breathFactor).toFixed(3)})`);
-    corona.addColorStop(1, 'rgba(240,190,80,0)');
-    cx.fillStyle = corona;
-    cx.beginPath(); cx.arc(px, py, g3, 0, Math.PI * 2); cx.fill();
-
-    // ── Mid halo ──
-    const midGrad = cx.createRadialGradient(px, py, 0, px, py, g2);
-    midGrad.addColorStop(0, `rgba(255,220,140,${(0.22 * this.alpha * breathFactor * flicker).toFixed(3)})`);
-    midGrad.addColorStop(0.4, `rgba(240,190,80,${(0.14 * this.alpha * breathFactor).toFixed(3)})`);
-    midGrad.addColorStop(1, 'rgba(240,190,80,0)');
-    cx.fillStyle = midGrad;
-    cx.beginPath(); cx.arc(px, py, g2, 0, Math.PI * 2); cx.fill();
-
-    // ── Rays ──
-    const rayCount = this.NUM_RAYS;
-    for (let i = 0; i < rayCount; i++) {
-      const angle = this.rayPh + (Math.PI * 2 / rayCount) * i;
-      // Each ray has its own length pulse offset
-      const lenPulse = 0.55 + 0.45 * Math.sin(this.breathPh * 1.3 + i * 0.8);
-      const rayLen   = (g1 * 2.2 + cl * 60) * lenPulse * breathFactor;
-      const rayWidth = r * 0.18;
-      const rayAlpha = (0.12 + cl * 0.22) * this.alpha * lenPulse * flicker;
-
+    // ── Tap crystallisation ripples ──
+    this.pulseRipples.forEach(rp => {
       cx.save();
-      cx.translate(px, py);
-      cx.rotate(angle);
-      const rayGrad = cx.createLinearGradient(r, 0, r + rayLen, 0);
-      rayGrad.addColorStop(0, `rgba(255,220,140,${rayAlpha.toFixed(3)})`);
-      rayGrad.addColorStop(0.5, `rgba(240,190,80,${(rayAlpha * 0.5).toFixed(3)})`);
-      rayGrad.addColorStop(1, 'rgba(240,190,80,0)');
-      cx.fillStyle = rayGrad;
-      cx.beginPath();
-      cx.moveTo(r, -rayWidth);
-      cx.lineTo(r + rayLen, 0);
-      cx.lineTo(r, rayWidth);
-      cx.closePath();
-      cx.fill();
+      cx.globalAlpha = rp.alpha * this.alpha;
+      cx.strokeStyle = `rgba(240,220,160,1)`;
+      cx.lineWidth = 1.5;
+      cx.beginPath(); cx.arc(px, py, rp.r, 0, Math.PI * 2); cx.stroke();
       cx.restore();
+    });
+
+    // ── Corona ──
+    if (g3 > 1) {
+      const corona = cx.createRadialGradient(px, py, g2 * 0.5, px, py, g3);
+      corona.addColorStop(0, `rgba(240,190,80,${(0.06 * this.alpha * breathFactor * glowScale).toFixed(3)})`);
+      corona.addColorStop(1, 'rgba(240,190,80,0)');
+      cx.fillStyle = corona;
+      cx.beginPath(); cx.arc(px, py, g3, 0, Math.PI * 2); cx.fill();
     }
 
-    // ── Inner glow ──
+    // ── Mid halo — blurry at start, tight at end ──
+    if (c < 0.95) {
+      // Blurry diffuse layer fades out as crystallinity rises
+      const blurAmt = Math.max(0, (1 - c) * 18);
+      if (blurAmt > 0.5) cx.filter = `blur(${blurAmt.toFixed(1)}px)`;
+      const midGrad = cx.createRadialGradient(px, py, 0, px, py, g2);
+      midGrad.addColorStop(0, `rgba(255,220,140,${(0.22 * this.alpha * breathFactor * (1-c*0.8) * flicker).toFixed(3)})`);
+      midGrad.addColorStop(0.4, `rgba(240,190,80,${(0.14 * this.alpha * breathFactor * (1-c*0.8)).toFixed(3)})`);
+      midGrad.addColorStop(1, 'rgba(240,190,80,0)');
+      cx.fillStyle = midGrad; cx.beginPath(); cx.arc(px, py, g2, 0, Math.PI * 2); cx.fill();
+      cx.filter = 'none';
+    }
+
+    // ── Rays — emerge from stage 2 onward, sharpen fully ──
+    if (c > 0.2) {
+      const rayAlphaBase = (c - 0.2) / 0.8; // 0→1 as c goes 0.2→1
+      const rayCount = this.NUM_RAYS;
+      for (let i = 0; i < rayCount; i++) {
+        const angle = this.rayPh + (Math.PI * 2 / rayCount) * i;
+        const lenPulse = 0.55 + 0.45 * Math.sin(this.breathPh * 1.3 + i * 0.8);
+        const rayLen   = (g1 * 1.8 + c * 80) * lenPulse * breathFactor;
+        const rayWidth = r * (0.18 - c * 0.08);
+        const rayAlpha = (0.10 + c * 0.28) * this.alpha * lenPulse * flicker * rayAlphaBase;
+
+        cx.save();
+        cx.translate(px, py);
+        cx.rotate(angle);
+        const rayGrad = cx.createLinearGradient(r, 0, r + rayLen, 0);
+        rayGrad.addColorStop(0, `rgba(255,240,160,${rayAlpha.toFixed(3)})`);
+        rayGrad.addColorStop(0.5, `rgba(240,190,80,${(rayAlpha * 0.5).toFixed(3)})`);
+        rayGrad.addColorStop(1, 'rgba(240,190,80,0)');
+        cx.fillStyle = rayGrad;
+        cx.beginPath();
+        cx.moveTo(r, -rayWidth); cx.lineTo(r + rayLen, 0); cx.lineTo(r, rayWidth);
+        cx.closePath(); cx.fill();
+        cx.restore();
+      }
+    }
+
+    // ── Inner glow — tightens and brightens ──
     const innerGrad = cx.createRadialGradient(px, py, 0, px, py, g1);
-    innerGrad.addColorStop(0, `rgba(255,240,180,${(0.9 * this.alpha * flicker).toFixed(3)})`);
-    innerGrad.addColorStop(0.3, `rgba(255,210,120,${(0.55 * this.alpha * breathFactor).toFixed(3)})`);
+    innerGrad.addColorStop(0, `rgba(255,248,200,${(0.8 * this.alpha * flicker * glowScale).toFixed(3)})`);
+    innerGrad.addColorStop(0.3, `rgba(255,210,100,${(0.55 * this.alpha * breathFactor * glowScale).toFixed(3)})`);
     innerGrad.addColorStop(1, 'rgba(240,190,80,0)');
     cx.fillStyle = innerGrad;
     cx.beginPath(); cx.arc(px, py, g1, 0, Math.PI * 2); cx.fill();
 
-    // ── Hard core ──
-    cx.globalAlpha = this.alpha * (0.85 + 0.15 * flicker);
-    cx.fillStyle = `rgba(255,248,220,1)`;
+    // ── Hard core — defined and sharp ──
+    const coreAlpha = (0.55 + c * 0.45) * this.alpha * (0.85 + 0.15 * flicker);
+    cx.globalAlpha = coreAlpha;
+    cx.fillStyle = c > 0.7 ? `rgba(255,252,230,1)` : `rgba(240,220,160,1)`;
     cx.beginPath(); cx.arc(px, py, r, 0, Math.PI * 2); cx.fill();
 
-    // ── Tiny hot centre ──
-    cx.globalAlpha = this.alpha;
-    cx.fillStyle = 'rgba(255,255,240,1)';
-    cx.beginPath(); cx.arc(px, py, r * 0.45, 0, Math.PI * 2); cx.fill();
+    // ── Hot centre ──
+    cx.globalAlpha = this.alpha * (0.7 + c * 0.3);
+    cx.fillStyle = 'rgba(255,255,245,1)';
+    cx.beginPath(); cx.arc(px, py, r * (0.35 + c * 0.15), 0, Math.PI * 2); cx.fill();
 
+    // ── Stage counter as subtle text (fades at full crystallinity) ──
+    if (this.stage > 0 && this.stage < this.maxStage && c < 0.85) {
+      cx.globalAlpha = this.alpha * (1 - c) * 0.35;
+      cx.fillStyle = 'rgba(240,204,136,1)';
+      cx.font = `300 ${Math.round(clamp(11, innerWidth*0.028, 14))}px 'Plus Jakarta Sans', sans-serif`;
+      cx.textAlign = 'center';
+      cx.textBaseline = 'middle';
+      cx.letterSpacing = '0.12em';
+      cx.fillText(`${this.stage} · ${this.maxStage}`, px, py + r * 3.8);
+    }
+
+    cx.globalAlpha = 1;
     cx.restore();
   }
 }
+function clamp(min, val, max) { return Math.min(max, Math.max(min, val)); }
 
 class ObsParticle {
   constructor() {
@@ -1061,8 +1134,9 @@ function applyLang() {
   document.getElementById('obsCohLine').innerHTML = t.obsCoherenceLine.replace(/\n/g,'<br>');
   document.getElementById('obsCohTap').textContent = t.obsCoherenceTap;
   document.getElementById('revisitBtn').textContent = 'revisit introduction';
-  const ltb = document.getElementById('langToggleBtn');
-  if (ltb) ltb.textContent = lang === 'en' ? 'ES' : 'EN';
+  // Home screen lang toggle — shows the OTHER language as the option
+  const hlb = document.getElementById('homeLangBtn');
+  if (hlb) hlb.textContent = lang === 'en' ? 'español' : 'english';
   updateHomeCount();
 }
 function updateHomeCount() {
@@ -1367,7 +1441,7 @@ function buildObsScreen() {
 
   // DRIFT / KASINA mode
   const modeHint = obsMode === 'kasina'
-    ? (t ? 'One point.<br>Hold it gently.' : 'Un punto.<br>Sostenlo suavemente.')
+    ? (t ? 'Hold it in attention.<br>Each touch crystallises it.' : 'Sostenlo en atención.<br>Cada toque lo cristaliza.')
     : (t ? 'One particle.<br>Just watch it.' : 'Una partícula.<br>Solo obsérvala.');
   const hintTop = obsMode === 'kasina' ? '62%' : '42%';
   screen.innerHTML = `
@@ -1404,7 +1478,7 @@ function buildObsScreen() {
         font-family:inherit;font-size:clamp(10px,2.5vw,12px);letter-spacing:.16em;
         color:rgba(201,169,110,.45);transition:border-color .3s ease,color .3s ease;
         min-height:36px;white-space:nowrap;">
-        ${t?'i am here':'estoy aquí'}
+        ${obsMode === 'kasina' ? (t?'crystallise':'cristalizar') : (t?'i am here':'estoy aquí')}
       </button>
     </div>
     <div id="meter" style="position:fixed;bottom:clamp(112px,24vw,140px);left:50%;
@@ -1853,9 +1927,35 @@ function startMotionCheck() {
 function doAffirm() {
   if (!fieldActive || isCoherent) return;
   lastAffirmTime = Date.now();
-  affirmBonus = Math.min(affirmBonus + 1.5, 12);
   playAffirmSound();
-  if (navigator.vibrate) navigator.vibrate(18);
+
+  if (obsMode === 'kasina' && kasinaParticle) {
+    // Kasina: each tap crystallises the object one stage
+    const done = kasinaParticle.evolve();
+    // Flash the affirmBtn
+    const btn = document.getElementById('affirmBtn');
+    if (btn) {
+      btn.style.borderColor = 'rgba(255,240,160,.9)';
+      btn.style.color = 'rgba(255,248,200,.95)';
+      btn.style.boxShadow = '0 0 28px rgba(240,200,80,.45)';
+      setTimeout(() => { if (btn) { btn.style.borderColor = ''; btn.style.color = ''; btn.style.boxShadow = ''; } }, 700);
+    }
+    // Update affirmBtn label to show stage progress
+    if (btn && !done) {
+      const remaining = kasinaParticle.maxStage - kasinaParticle.stage;
+      btn.style.transition = 'all .3s ease';
+    }
+    if (done) {
+      // Full crystallisation — brief hold then coherence
+      const btn2 = document.getElementById('affirmBtn');
+      if (btn2) { btn2.textContent = lang === 'en' ? 'crystallised' : 'cristalizado'; btn2.style.color = 'rgba(255,248,200,.95)'; btn2.style.borderColor = 'rgba(255,240,160,.8)'; }
+      setTimeout(() => reachObsCoherence(), 1800);
+    }
+    return;
+  }
+
+  // Drift mode
+  affirmBonus = Math.min(affirmBonus + 1.5, 12);
   const btn = document.getElementById('affirmBtn');
   if (btn) { btn.style.borderColor = 'rgba(201,169,110,.7)'; btn.style.color = 'rgba(240,210,140,.9)'; btn.style.boxShadow = '0 0 20px rgba(201,169,110,.3)'; }
   const ring = document.getElementById('clarity-ring');
