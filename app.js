@@ -4191,7 +4191,8 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
     font-size:clamp(10px,2.6vw,12px);letter-spacing:.2em;
     color:rgba(240,230,208,.22);cursor:pointer;padding:10px 20px;
     font-family:inherit;-webkit-tap-highlight-color:transparent;
-    transition:color .4s ease;`;
+    transition:color .4s ease, opacity .4s ease;
+    opacity:0.22;pointer-events:none;`;
   continueBtn.textContent = t ? 'skip' : 'omitir';
   continueBtn.addEventListener('click', () => {
     layer.style.transition = 'opacity 0.8s ease';
@@ -4224,6 +4225,12 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
 async function getVoiceReflection(spokenText, zoneKey, shadowWord, toneKey, reflectionEl, continueBtn) {
   const apiKey = lsGet('field_api_key');
   if (!apiKey) { continueBtn.style.opacity = '1'; continueBtn.style.pointerEvents = 'auto'; return; }
+
+  // Hard fallback — always enable continue after 12s regardless of API outcome
+  const fallbackTimer = setTimeout(() => {
+    continueBtn.style.opacity = '1';
+    continueBtn.style.pointerEvents = 'auto';
+  }, 12000);
 
   reflectionEl.style.color = 'rgba(201,169,110,.25)';
   reflectionEl.textContent = '·  ·  ·';
@@ -4271,8 +4278,10 @@ async function getVoiceReflection(spokenText, zoneKey, shadowWord, toneKey, refl
 
   // Show continue after reflection has time to land
   setTimeout(() => {
+    clearTimeout(fallbackTimer);
     continueBtn.style.opacity = '1';
     continueBtn.style.color = 'rgba(240,230,208,.82)';
+    continueBtn.style.pointerEvents = 'auto';
   }, 4000);
 }
 
