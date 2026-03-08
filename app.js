@@ -3004,6 +3004,7 @@ function enterStill() {
     // ── Still canvas — crystallised kasina, slow breath, already arrived ──
     const stillP = document.querySelector('#s-still .still-p');
     if (stillP) {
+      stillP.style.opacity = '0'; // canvas replaces the gold dot
       const sc = document.createElement('canvas');
       sc.id = 'still-canvas';
       sc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0;transition:opacity 2s ease;';
@@ -4026,19 +4027,11 @@ function showTonePicker(container, onSelect) {
 }
 
 function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComplete) {
-  // Clear any bleeding tap hints immediately
+  // Destroy the fixed body map wrap so it never bleeds through
+  const bmw = document.getElementById('bodymapWrap');
+  if (bmw) { bmw.style.opacity = '0'; setTimeout(() => { if (bmw.parentNode) bmw.parentNode.removeChild(bmw); }, 400); }
   const decTapHint = document.getElementById('decTapHint');
   if (decTapHint) decTapHint.textContent = '';
-  // Also clear the body map tapEl if present
-  const bodyWrap = document.getElementById('body-map-wrap');
-  if (bodyWrap) {
-    bodyWrap.querySelectorAll('div').forEach(d => {
-      if (d.textContent && (d.textContent.includes('tap the area') || d.textContent.includes('toca donde'))) {
-        d.style.opacity = '0';
-        setTimeout(() => { d.textContent = ''; }, 600);
-      }
-    });
-  }
   const hasSpeech = ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
   const apiKey = lsGet('field_api_key');
 
@@ -4577,12 +4570,10 @@ async function runCollapseAI(stateName, imagPrompt) {
         ampEl.style.opacity = '1';
       };
       if (ampEl.dataset.waitingForBreath === '1') {
-        // Poll until breath is past cycle 1 (breathCycle >= 1 means first exhale done)
+        // Poll until collapse orb has completed at least 1 cycle
         const poll = setInterval(() => {
-          if (breathCycle >= 1 || !breathRunning) {
-            clearInterval(poll);
-            setTimeout(revealAmp, 600);
-          }
+          const orbDone = (breathOrb && breathOrb.cycleCount >= 1) || !breathRunning;
+          if (orbDone) { clearInterval(poll); setTimeout(revealAmp, 600); }
         }, 500);
       } else {
         setTimeout(revealAmp, 100);
@@ -4692,6 +4683,9 @@ function startDissolutionChamber() {
   chamberTyping    = false;
   chamberLastAI    = '';
   currentMode = 'chamber';
+  // Hard-remove body map wrap — must never bleed through
+  const _bmw = document.getElementById('bodymapWrap');
+  if (_bmw && _bmw.parentNode) _bmw.parentNode.removeChild(_bmw);
   showBackBtn();
   document.getElementById('backBtn').onclick = () => startDecohere();
 
@@ -4876,6 +4870,9 @@ function chamberToggleMic() {
 // PHASE 1: Acknowledgment — word fades in alone in silence, then breath begins
 function startDecAcknowledge() {
   const displayName = lang==='en' ? decStateName : decStateNameES;
+  // Hard-remove body map wrap — must never bleed through
+  const _bmw = document.getElementById('bodymapWrap');
+  if (_bmw && _bmw.parentNode) _bmw.parentNode.removeChild(_bmw);
 
   const ackLayer    = document.getElementById('dec-ack-layer');
   const breathLayer = document.getElementById('dec-breath-layer');
