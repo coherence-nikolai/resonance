@@ -66,6 +66,7 @@ let kasinaParticle = null;
 let obsStorm = false;
 let noteCount = 0;
 let noteSense = '';
+let sessionNoteLog = []; // accumulates sense·tone pairs for AI mirror
 let stormTimer = null;
 
 // Storm screen timeout
@@ -1259,19 +1260,28 @@ function buildObsScreen() {
   const screen = document.getElementById('s-observe');
 
   if (obsMode === 'noting') {
+    // ── TWO-SCREEN NOTING FLOW ──
+    // Screen 1: Sense — full screen, one question
+    // Screen 2: Tone — full screen, auto-shown after sense tap
     screen.innerHTML = `
-      <div class="observe-alt-wrap">
-        <div class="observe-alt-title">${t?'noting':'notar'}</div>
-        <div id="obs-timer-noting" style="font-size:clamp(14px,3.5vw,17px);letter-spacing:.14em;
-          color:rgba(201,169,110,.62);font-weight:300;min-height:22px;"></div>
+      <div id="noting-sense-screen" class="noting-phase active-phase">
+        <div class="noting-step-dots"><span class="nsdot active"></span><span class="nsdot"></span></div>
+        <div class="noting-question">${t ? 'what are you noticing?' : '¿qué estás notando?'}</div>
+        <div class="noting-sub">${t ? 'one sense, right now' : 'un sentido, ahora mismo'}</div>
+        <div id="senseRow" class="sense-row-full"></div>
         <div id="stormWord" class="storm-word"></div>
         <div id="noteCounter" class="note-counter">${t?'notes':'notas'} · 0</div>
-        <div id="senseRow" class="sense-row"></div>
-        <div class="observe-alt-hint" style="font-size:var(--fl);">${t?'sense · tone':'sentido · tono'}</div>
-        <div id="toneRow" class="tone-row" style="opacity:.35;pointer-events:none;"></div>
-        <div id="noting-progress" style="display:flex;gap:6px;justify-content:center;margin-top:8px;"></div>
+        <div id="noting-progress" style="display:flex;gap:6px;justify-content:center;margin-top:4px;"></div>
+      </div>
+      <div id="noting-tone-screen" class="noting-phase">
+        <div class="noting-step-dots"><span class="nsdot"></span><span class="nsdot active"></span></div>
+        <div class="noting-question" id="noting-sense-label"></div>
+        <div class="noting-sub">${t ? 'and its quality?' : '¿y su cualidad?'}</div>
+        <div class="noting-tone-anchor">${t ? 'good · difficult · neither' : 'bueno · difícil · ninguno'}</div>
+        <div id="toneRow" class="tone-row-full"></div>
       </div>`;
 
+    // Progress dots
     const prog = document.getElementById('noting-progress');
     const target = obsStorm ? 10 : 7;
     for (let i = 0; i < target; i++) {
@@ -1280,43 +1290,36 @@ function buildObsScreen() {
       prog.appendChild(d);
     }
 
+    // Sense buttons — full screen style
     const senseRow = document.getElementById('senseRow');
     NOTE_SENSES[lang].forEach(s => {
       const b = document.createElement('button');
-      b.className = 'sense-chip';
-      b.innerHTML = `<span style="display:block;font-size:18px;opacity:.7;margin-bottom:4px;">${s.glyph}</span>${s.label}`;
+      b.className = 'sense-chip-full';
+      b.innerHTML = `<span class="scf-glyph">${s.glyph}</span><span class="scf-label">${s.label}</span>`;
       b.addEventListener('click', () => chooseNoteSense(s.key, b));
+      b.addEventListener('touchend', e => { e.preventDefault(); chooseNoteSense(s.key, b); });
       senseRow.appendChild(b);
     });
+
+    // Tone buttons — full screen style
     const toneRow = document.getElementById('toneRow');
     NOTE_TONES[lang].forEach(tone => {
       const b = document.createElement('button');
-      b.className = 'tone-chip';
+      b.className = 'tone-chip-full';
       b.dataset.toneKey = tone.key;
-      b.innerHTML = `<span class="tone-chip-symbol">${tone.label}</span><span class="tone-chip-word">${tone.word}</span>`;
+      b.innerHTML = `<span class="tcf-symbol">${tone.label}</span><span class="tcf-word">${tone.word}</span>`;
       b.style.setProperty('--tone-color', tone.color);
       b.style.setProperty('--tone-border', tone.border);
       b.addEventListener('click', () => chooseNoteTone(tone.key, b));
+      b.addEventListener('touchend', e => { e.preventDefault(); chooseNoteTone(tone.key, b); });
       toneRow.appendChild(b);
     });
 
     const stormLink = document.createElement('div');
-    stormLink.style.cssText = 'margin-top:24px;font-size:clamp(11px,2.8vw,13px);letter-spacing:.18em;color:rgba(240,204,136,.58);cursor:pointer;padding:8px 0;';
+    stormLink.style.cssText = 'position:absolute;bottom:clamp(28px,7vh,48px);left:50%;transform:translateX(-50%);font-size:clamp(11px,2.8vw,13px);letter-spacing:.18em;color:rgba(240,204,136,.58);cursor:pointer;padding:8px 16px;white-space:nowrap;-webkit-tap-highlight-color:transparent;';
     stormLink.textContent = lang === 'en' ? 'enter storm' : 'entrar tormenta';
-    stormLink.addEventListener('click', () => {
-      if(audioCtx) playTap();
-      // Fade observe screen first to prevent flash
-      const obsScr = document.getElementById('s-observe');
-      if (obsScr) { obsScr.style.transition = 'opacity 0.3s ease'; obsScr.style.opacity = '0'; }
-      setTimeout(() => { clearObserver(); startStormScreen(); }, 280);
-    });
-    stormLink.addEventListener('touchend', e => {
-      e.preventDefault();
-      if(audioCtx) playTap();
-      const obsScr = document.getElementById('s-observe');
-      if (obsScr) { obsScr.style.transition = 'opacity 0.3s ease'; obsScr.style.opacity = '0'; }
-      setTimeout(() => { clearObserver(); startStormScreen(); }, 280);
-    });
+    stormLink.addEventListener('click', () => { if(audioCtx) playTap(); const obsScr = document.getElementById('s-observe'); if (obsScr) { obsScr.style.transition = 'opacity 0.3s ease'; obsScr.style.opacity = '0'; } setTimeout(() => { clearObserver(); startStormScreen(); }, 280); });
+    document.getElementById('noting-sense-screen').appendChild(stormLink);
 
     // Voice noting button — only if Web Speech API available
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -1677,12 +1680,9 @@ function enterObserve() {
 
   setTimeout(() => {
     if (obsMode === 'noting') {
-      noteCount = 0; noteSense = ''; clarityLevel = 0; fieldActive = true; isCoherent = false;
-      observeParticle = new ObsParticle();
-      observeParticle.cx = 0.5; observeParticle.cy = 0.82;
-      observeParticle.x = innerWidth * 0.5; observeParticle.y = innerHeight * 0.82;
-      observeParticle.targetAlpha = 0.9;
-      kasinaParticle = null; particleVisible = true;
+      noteCount = 0; noteSense = ''; sessionNoteLog = []; clarityLevel = 0; fieldActive = true; isCoherent = false;
+      // No particle during noting — inward attention only
+      observeParticle = null; kasinaParticle = null; particleVisible = false;
 
       if (obsStorm) {
         // Storm + noting — go straight to storm screen
@@ -1904,7 +1904,14 @@ function reachObsCoherence() {
     document.getElementById('obsCohWord').textContent = cohWord;
     document.getElementById('obsCohLine').innerHTML = cohLine.replace(/\n/g,'<br>');
     document.getElementById('obsCohTap').textContent = TRANSLATIONS[lang].obsCoherenceTap;
+    // Reset AI mirror
+    const mirrorEl = document.getElementById('obsCohAI');
+    if (mirrorEl) { mirrorEl.textContent = ''; mirrorEl.style.color = 'rgba(240,230,208,.0)'; }
     showScreen('s-obs-coherence');
+    // Fire observe AI mirror after screen settles (noting only)
+    if (isNoting && sessionNoteLog.length >= 3) {
+      setTimeout(() => runObserveAI([...sessionNoteLog]), 1800);
+    }
   }, 2200);
 }
 
@@ -2055,16 +2062,39 @@ function clearObserver() {
 function chooseNoteSense(key, el) {
   noteSense = key;
   if (audioCtx) playNoteSense(key); else { initAudio(); if(audioCtx) playNoteSense(key); }
-  document.querySelectorAll('#senseRow .sense-chip').forEach(x => x.classList.remove('active'));
+
+  // Flash selected sense chip
+  document.querySelectorAll('.sense-chip-full').forEach(x => x.classList.remove('active'));
   if (el) el.classList.add('active');
-  const toneRow = document.getElementById('toneRow');
-  if (toneRow) { toneRow.style.opacity = '1'; toneRow.style.pointerEvents = 'all'; }
+
+  // Update tone screen header with the chosen sense
+  const senseLabel = document.getElementById('noting-sense-label');
+  const senseObj = NOTE_SENSES[lang].find(s => s.key === key);
+  if (senseLabel && senseObj) senseLabel.textContent = senseObj.label;
+
+  // Slide to tone screen after brief delay
+  setTimeout(() => {
+    const s1 = document.getElementById('noting-sense-screen');
+    const s2 = document.getElementById('noting-tone-screen');
+    if (s1) { s1.style.transition = 'opacity 0.3s ease, transform 0.35s ease'; s1.style.opacity = '0'; s1.style.transform = 'translateX(-24px)'; }
+    setTimeout(() => {
+      if (s1) s1.classList.remove('active-phase');
+      if (s2) {
+        s2.classList.add('active-phase');
+        s2.style.opacity = '0'; s2.style.transform = 'translateX(24px)';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          s2.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+          s2.style.opacity = '1'; s2.style.transform = 'translateX(0)';
+        }));
+      }
+    }, 300);
+  }, 150);
 }
 function chooseNoteTone(key, el) {
   if (!noteSense) return;
   noteCount += 1;
   const target = obsStorm ? 10 : 7;
-  document.querySelectorAll('#toneRow .tone-chip').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tone-chip-full').forEach(x => x.classList.remove('active'));
   if (el) el.classList.add('active');
   const counter = document.getElementById('noteCounter');
   if (counter) counter.textContent = (lang==='en'?'notes':'notas') + ' · ' + noteCount;
@@ -2072,23 +2102,40 @@ function chooseNoteTone(key, el) {
     const d = document.getElementById('ndot' + i);
     if (d) d.classList.toggle('lit', i < noteCount);
   }
-  if (observeParticle) observeParticle.scatter();
   if (key === 'pleasant') playTonePleasant();
   else if (key === 'unpleasant') playToneUnpleasant();
   else playToneNeutral();
   pulseStormWord(noteSense + ' · ' + key);
+  sessionNoteLog.push(noteSense + ' · ' + key);
   if (obsStorm && currentMode === 'storm') addStormNoteLog(noteSense, key);
+
+  const savedSense = noteSense;
+  noteSense = '';
+
+  if (noteCount >= target) {
+    clearInterval(obsTimerInterval);
+    reachObsCoherence();
+    return;
+  }
+
+  // Slide back to sense screen
   setTimeout(() => {
-    document.querySelectorAll('#senseRow .sense-chip').forEach(x => x.classList.remove('active'));
-    document.querySelectorAll('#toneRow .tone-chip').forEach(x => x.classList.remove('active'));
-    const toneRow = document.getElementById('toneRow');
-    if (toneRow) { toneRow.style.opacity = '.35'; toneRow.style.pointerEvents = 'none'; }
-    noteSense = '';
-    if (noteCount >= target) {
-      clearInterval(obsTimerInterval);
-      reachObsCoherence();
-    }
-  }, 420);
+    const s1 = document.getElementById('noting-sense-screen');
+    const s2 = document.getElementById('noting-tone-screen');
+    if (s2) { s2.style.transition = 'opacity 0.3s ease, transform 0.35s ease'; s2.style.opacity = '0'; s2.style.transform = 'translateX(24px)'; }
+    setTimeout(() => {
+      if (s2) s2.classList.remove('active-phase');
+      document.querySelectorAll('.sense-chip-full').forEach(x => x.classList.remove('active'));
+      if (s1) {
+        s1.classList.add('active-phase');
+        s1.style.opacity = '0'; s1.style.transform = 'translateX(-24px)';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          s1.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+          s1.style.opacity = '1'; s1.style.transform = 'translateX(0)';
+        }));
+      }
+    }, 300);
+  }, 280);
 }
 let stormNoteLog = [];
 function addStormNoteLog(sense, tone) {
@@ -2312,6 +2359,9 @@ function selectState(state) {
   initScene('state_chosen', spChosen);
   collapseStage = 0;
   document.querySelectorAll('.cp-stage').forEach(s => { s.classList.remove('on'); s.style.cssText=''; });
+  // Reset imagPre for fresh entry
+  const imagPreReset = document.getElementById('imagPre');
+  if (imagPreReset) { imagPreReset.style.display = ''; imagPreReset.style.opacity = '1'; }
   clearAllBreath();
   document.getElementById('tapNext').textContent = t.tapHint;
   particlesHidden = false;
@@ -2366,7 +2416,16 @@ function showCollapseStage(n) {
     const tapEl = document.getElementById('tapNext');
     tapEl.style.transition = 'opacity 0.7s ease';
     tapEl.style.opacity = n<6 ? '1' : '0';
-    if (n===4) startBreath();
+    if (n===4) {
+      // Fire collapse AI amplifier — shown during imagination prompt, before breath starts
+      const ip = document.getElementById('imagPrompt');
+      const ampEl = document.getElementById('collapseAI');
+      if (ampEl) { ampEl.textContent = ''; ampEl.style.color = 'rgba(240,230,208,.0)'; }
+      if (ip && ip.textContent) {
+        setTimeout(() => runCollapseAI(curStateName, ip.textContent), 800);
+      }
+      startBreath();
+    }
   };
   if (current) {
     isTransitioning = true; // [TECH3]
@@ -2413,9 +2472,13 @@ function startBreath() {
   const inviteLine1 = lang === 'en' ? 'breathe in all possibilities' : 'inhala todas las posibilidades';
   const inviteLine2 = (lang === 'en' ? 'exhale into ' : 'exhala hacia ') + stateName;
 
-  // Fade out the pre-breath imagination prompt
+  // Fade out the pre-breath imagination prompt immediately when breath starts
   const imagPre = document.getElementById('imagPre');
-  if (imagPre) { imagPre.style.opacity = '0'; setTimeout(() => { if (imagPre) imagPre.style.visibility = 'hidden'; }, 1300); }
+  if (imagPre) {
+    imagPre.style.transition = 'opacity 0.8s ease';
+    imagPre.style.opacity = '0';
+    setTimeout(() => { if (imagPre) { imagPre.style.display = 'none'; } }, 850);
+  }
 
   // Hide DOM bp element — we use canvas now
   const bp = document.getElementById('bp'); if (bp) bp.style.opacity = '0';
@@ -2833,16 +2896,16 @@ function buildShadowGrid() {
 
   // Each word has a weight — heavier words are larger and lower, lighter ones drift higher
   const WORD_WEIGHTS = {
-    Anxious: { size: 1.1, y: 0.28, x: 0.18 },
-    Heavy:   { size: 1.4, y: 0.55, x: 0.52 },
-    Stuck:   { size: 1.0, y: 0.42, x: 0.25 },
-    Numb:    { size: 0.75, y: 0.18, x: 0.60 },
-    Scattered: { size: 0.9, y: 0.12, x: 0.22 },
-    Angry:   { size: 1.25, y: 0.38, x: 0.55 },
-    Tired:   { size: 1.15, y: 0.68, x: 0.15 },
-    Overwhelmed: { size: 1.5, y: 0.72, x: 0.38 },
-    Disconnected:{ size: 0.85, y: 0.22, x: 0.42 },
-    Afraid:  { size: 1.0, y: 0.58, x: 0.62 },
+    Anxious:      { size: 1.1, y: 0.18, x: 0.20 },
+    Heavy:        { size: 1.4, y: 0.58, x: 0.55 },
+    Stuck:        { size: 1.0, y: 0.34, x: 0.22 },
+    Numb:         { size: 0.75, y: 0.10, x: 0.62 },
+    Scattered:    { size: 0.9, y: 0.08, x: 0.18 },
+    Angry:        { size: 1.25, y: 0.44, x: 0.52 },
+    Tired:        { size: 1.15, y: 0.76, x: 0.16 },
+    Overwhelmed:  { size: 1.5, y: 0.88, x: 0.42 },
+    Disconnected: { size: 0.85, y: 0.26, x: 0.40 },
+    Afraid:       { size: 1.0, y: 0.70, x: 0.55 },
   };
 
   // Container fades in after arrival text reads
@@ -2993,8 +3056,11 @@ function showBodyMap(mode, payload) {
     // Remove padding constraints — full screen figure
     const scr = document.getElementById('s-witness');
     if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; }
-    grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;"></div>';
+    grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);"></div>';
     wrap = document.getElementById('bodymapWrap');
+    // Hide main canvas during witness body map
+    const mainCv = document.getElementById('cv');
+    if (mainCv) mainCv.style.opacity = '0';
   } else {
     // Collapse: use dedicated s-bodymap screen
     const screen = document.getElementById('s-bodymap');
@@ -3015,81 +3081,72 @@ function showBodyMap(mode, payload) {
   if (isDecohere) {
     const W = innerWidth, H = innerHeight;
 
-    // Question label
+    // Subtle question hint at bottom
     const qEl = document.createElement('div');
-    qEl.style.cssText = `position:absolute;bottom:clamp(36px,9vw,60px);left:50%;
-      transform:translateX(-50%);font-size:clamp(16px,4.2vw,22px);font-weight:300;
-      color:rgba(240,230,208,.65);letter-spacing:.04em;text-align:center;
-      pointer-events:none;z-index:2;line-height:1.5;white-space:nowrap;`;
+    qEl.style.cssText = `position:absolute;bottom:clamp(28px,7vw,48px);left:50%;
+      transform:translateX(-50%);font-size:clamp(13px,3.2vw,16px);font-weight:300;
+      color:rgba(240,230,208,.40);letter-spacing:.14em;text-align:center;
+      pointer-events:none;z-index:2;white-space:nowrap;
+      transition:opacity 0.8s ease;`;
     qEl.textContent = question;
     wrap.appendChild(qEl);
 
     // Full-screen canvas
     const fc = document.createElement('canvas');
     fc.width = W; fc.height = H;
-    fc.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;';
+    fc.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;transition:opacity 1.2s ease;';
     wrap.appendChild(fc);
     const fx = fc.getContext('2d');
 
-    // Figure: taller, centred, full use of screen
-    const FIG_TOP  = 0.10,  FIG_BOT = 0.86;
-    const FIG_L    = 0.25,  FIG_R   = 0.75;
+    // Figure layout
+    const FIG_TOP = 0.08, FIG_BOT = 0.88;
+    const FIG_L = 0.28, FIG_R = 0.72;
     const figH = (FIG_BOT - FIG_TOP) * H;
     const figW = (FIG_R - FIG_L) * W;
     const figX = FIG_L * W, figY = FIG_TOP * H;
 
-    // Shadow word watermark — faint behind figure, holds concept while user locates in body
+    // Shadow word watermark — very faint behind figure
     const watermarkEl = document.createElement('div');
-    watermarkEl.style.cssText = `position:absolute;left:50%;top:48%;
+    watermarkEl.style.cssText = `position:absolute;left:50%;top:46%;
       transform:translate(-50%,-50%);
-      font-size:clamp(44px,13vw,82px);font-weight:300;
+      font-size:clamp(38px,11vw,72px);font-weight:300;
       font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
-      color:rgba(180,160,210,.07);letter-spacing:.06em;
-      pointer-events:none;z-index:0;white-space:nowrap;`;
+      color:rgba(180,160,210,.06);letter-spacing:.06em;
+      pointer-events:none;z-index:0;white-space:nowrap;
+      transition:opacity 0.6s ease;`;
     watermarkEl.textContent = decStateName || '';
     wrap.appendChild(watermarkEl);
 
-    // Zone definitions — must be declared before DOM label loop below
+    // Shadow word ceremony — appears at tapped zone, glows and fades
+    const ceremonyEl = document.createElement('div');
+    ceremonyEl.style.cssText = `position:absolute;left:50%;
+      transform:translate(-50%,-50%);
+      font-size:clamp(26px,7vw,40px);font-weight:300;
+      font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
+      color:rgba(220,200,240,0);letter-spacing:.06em;
+      text-shadow:0 0 0px rgba(180,160,200,0);
+      pointer-events:none;z-index:6;white-space:nowrap;
+      transition:color 0.5s ease, text-shadow 0.5s ease, opacity 0.8s ease;`;
+    ceremonyEl.textContent = decStateName || '';
+    wrap.appendChild(ceremonyEl);
+
+    // Zone definitions
     const SPOT_BANDS_Y = {
       head:    [0.00, 0.18],
       throat:  [0.13, 0.24],
       chest:   [0.20, 0.42],
       stomach: [0.40, 0.54],
-      pelvis:  [0.52, 0.70],
+      pelvis:  [0.52, 0.72],
     };
     const ZONES = [
-      { key:'head',    labelY: 0.08 },
-      { key:'throat',  labelY: 0.21 },
-      { key:'chest',   labelY: 0.33 },
-      { key:'stomach', labelY: 0.49 },
-      { key:'pelvis',  labelY: 0.64 },
+      { key:'head',    centerY: 0.09 },
+      { key:'throat',  centerY: 0.19 },
+      { key:'chest',   centerY: 0.31 },
+      { key:'stomach', centerY: 0.47 },
+      { key:'pelvis',  centerY: 0.62 },
     ];
 
-    // DOM zone labels — right-aligned left of figure, never clip
-    const ZONE_LABELS = {
-      en: { head:'head', throat:'throat', chest:'chest', stomach:'stomach', pelvis:'pelvis' },
-      es: { head:'cabeza', throat:'garganta', chest:'pecho', stomach:'vientre', pelvis:'pelvis' }
-    };
-    const zoneLabelEls = {};
-    ZONES.forEach((z, idx) => {
-      const lyPct = ((figY + z.labelY * figH) / H * 100).toFixed(1);
-      const el = document.createElement('div');
-      el.style.cssText = `position:absolute;
-        left:clamp(8px, ${(FIG_L * 100 - 18).toFixed(1)}%, ${Math.round(FIG_L * W - 8)}px);
-        top:${lyPct}%;transform:translateY(-50%);
-        font-size:clamp(12px,3.2vw,15px);font-weight:300;
-        font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:.12em;text-transform:uppercase;
-        color:rgba(200,185,215,.32);pointer-events:none;z-index:5;
-        transition:color 0.4s ease,opacity 0.5s ease;white-space:nowrap;
-        opacity:0;text-align:right;
-        right:${(100 - FIG_L * 100 + 2).toFixed(1)}%;left:auto;`;
-      el.textContent = ZONE_LABELS[lang][z.key];
-      wrap.appendChild(el);
-      zoneLabelEls[z.key] = el;
-      setTimeout(() => { el.style.opacity = '1'; }, 80 * idx + 250);
-    });
-
-    // Dot positions — head circular, legs extended
+    // Dot positions
     const aspectCorrect = figH / figW;
     const BODY_PTS_LOCAL = [
       ...(() => {
@@ -3112,7 +3169,6 @@ function showBodyMap(mode, payload) {
       [0.86, 0.49, 1.2, 5], [0.88, 0.56, 1.2, 5],
       [0.28, 0.585, 1.5, 7], [0.38, 0.59, 1.2, 5], [0.5, 0.595, 1.3, 5],
       [0.62, 0.59, 1.2, 5], [0.72, 0.585, 1.5, 7],
-      // Legs
       [0.36, 0.65, 1.2, 5], [0.43, 0.655, 1.1, 4], [0.50, 0.65, 1.1, 4],
       [0.57, 0.655, 1.1, 4], [0.64, 0.65, 1.2, 5],
       [0.34, 0.72, 1.1, 4], [0.41, 0.725, 1.0, 4],
@@ -3123,23 +3179,17 @@ function showBodyMap(mode, payload) {
 
     let activeSpot = null;
     let glowPhase = 0;
+    let breathPhase = 0;
     let somatic = false;
     let figRafId = null;
-
-    // Echo word shown on tap
-    const echoEl = document.createElement('div');
-    echoEl.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);
-      font-size:clamp(28px,8vw,44px);font-weight:300;
-      font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
-      color:rgba(200,185,210,.9);text-shadow:0 0 30px rgba(180,160,200,.5);
-      pointer-events:none;z-index:4;opacity:0;transition:opacity 1s ease;
-      letter-spacing:.06em;white-space:nowrap;`;
-    wrap.appendChild(echoEl);
 
     function drawFigure() {
       if (currentMode !== 'witness') { cancelAnimationFrame(figRafId); return; }
       fx.clearRect(0, 0, W, H);
-      glowPhase += 0.025;
+      glowPhase += 0.022;
+      breathPhase += 0.008; // ~0.5Hz breath rhythm
+
+      const breathPulse = 0.5 + 0.5 * Math.sin(breathPhase);
 
       BODY_PTS_LOCAL.forEach(([nx, ny, r, gr]) => {
         const px = figX + nx * figW;
@@ -3150,11 +3200,11 @@ function showBodyMap(mode, payload) {
           if (ny >= lo && ny <= hi) inSpot = true;
         }
         const pulse = inSpot
-          ? 0.6 + 0.4 * Math.sin(glowPhase * 2.2)
-          : 0.45 + 0.14 * Math.sin(glowPhase + nx * 4);
-        const alpha = inSpot ? 0.88 + 0.12 * pulse : 0.45 + 0.15 * pulse;
-        const glowA = inSpot ? 0.40 * pulse : 0.14 * pulse;
-        const glowRad = inSpot ? gr * 2.4 : gr * 1.4;
+          ? 0.55 + 0.45 * Math.sin(glowPhase * 2.0)
+          : 0.28 + 0.22 * breathPulse + 0.06 * Math.sin(glowPhase + nx * 3);
+        const alpha = inSpot ? 0.85 + 0.15 * pulse : 0.32 + 0.18 * breathPulse;
+        const glowA = inSpot ? 0.45 * pulse : 0.10 * breathPulse;
+        const glowRad = inSpot ? gr * 2.6 : gr * 1.2 + gr * 0.4 * breathPulse;
 
         const grad = fx.createRadialGradient(px, py, 0, px, py, glowRad);
         grad.addColorStop(0, `${ptGlowColor}${glowA.toFixed(3)})`);
@@ -3163,7 +3213,7 @@ function showBodyMap(mode, payload) {
         fx.beginPath(); fx.arc(px, py, glowRad, 0, Math.PI*2); fx.fill();
         fx.globalAlpha = alpha;
         fx.fillStyle = ptColor;
-        fx.beginPath(); fx.arc(px, py, r * (inSpot ? 1.9 : 1), 0, Math.PI*2); fx.fill();
+        fx.beginPath(); fx.arc(px, py, r * (inSpot ? 2.0 : 1 + 0.25 * breathPulse), 0, Math.PI*2); fx.fill();
         fx.globalAlpha = 1;
       });
 
@@ -3171,85 +3221,75 @@ function showBodyMap(mode, payload) {
     }
     figRafId = requestAnimationFrame(drawFigure);
 
-    // Invisible hit zones overlaid on figure
-    ZONES.forEach((z, idx) => {
+    // Invisible hit zones — no visible labels, trust the body
+    ZONES.forEach((z) => {
       const [lo, hi] = SPOT_BANDS_Y[z.key];
-      const hitTop  = figY + lo * figH;
-      const hitH    = (hi - lo) * figH;
-      const hitL    = figX - figW * 0.1;
-      const hitW    = figW * 1.2;
+      const hitTop = figY + lo * figH;
+      const hitH2  = (hi - lo) * figH;
+      const hitL   = figX - figW * 0.12;
+      const hitW   = figW * 1.24;
 
       const hitBtn = document.createElement('button');
       hitBtn.style.cssText = `position:absolute;left:${hitL}px;top:${hitTop}px;
-        width:${hitW}px;height:${hitH}px;
+        width:${hitW}px;height:${hitH2}px;
         background:none;border:none;cursor:pointer;z-index:3;
         -webkit-tap-highlight-color:transparent;`;
-      hitBtn.setAttribute('aria-label', ZONE_LABELS[lang][z.key]);
 
       hitBtn.addEventListener('click', () => {
         if (somatic) return;
         somatic = true;
         activeSpot = z.key;
 
-        // Highlight the tapped zone label
-        Object.entries(zoneLabelEls).forEach(([k, el]) => {
-          el.style.color = k === z.key
-            ? 'rgba(210,190,235,.92)'
-            : 'rgba(200,185,215,.12)';
-        });
-
-        // Play zone tone
+        // Zone tone + overtone
         if (audioCtx) {
           const zoneFreqs = { head:1056, throat:792, chest:528, stomach:396, pelvis:264 };
           const f = zoneFreqs[z.key] || 528;
           const oz = audioCtx.createOscillator(), gz = audioCtx.createGain();
           oz.type='sine'; oz.frequency.value=f;
           gz.gain.setValueAtTime(0,audioCtx.currentTime);
-          gz.gain.linearRampToValueAtTime(0.045,audioCtx.currentTime+0.12);
-          gz.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+2.2);
-          oz.connect(gz); gz.connect(audioCtx.destination); oz.start(); oz.stop(audioCtx.currentTime+2.5);
+          gz.gain.linearRampToValueAtTime(0.055,audioCtx.currentTime+0.10);
+          gz.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+2.8);
+          oz.connect(gz); gz.connect(audioCtx.destination); oz.start(); oz.stop(audioCtx.currentTime+3.2);
+          const oz2 = audioCtx.createOscillator(), gz2 = audioCtx.createGain();
+          oz2.type='sine'; oz2.frequency.value=f*1.5;
+          gz2.gain.setValueAtTime(0,audioCtx.currentTime);
+          gz2.gain.linearRampToValueAtTime(0.018,audioCtx.currentTime+0.18);
+          gz2.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+2.0);
+          oz2.connect(gz2); gz2.connect(audioCtx.destination); oz2.start(); oz2.stop(audioCtx.currentTime+2.2);
         }
 
-        // Echo: "grief · stomach" — sits below the figure, never overlaps
-        const zoneName = ZONE_LABELS[lang][z.key];
-        const shadowName = decStateName || '';
-        echoEl.textContent = shadowName ? `${shadowName} · ${zoneName}` : zoneName;
-        // Always place below figure with clearance
-        const echoBelowFig = figY + figH + 24;
-        echoEl.style.top = Math.min(echoBelowFig, H - 80) + 'px';
-        echoEl.style.opacity = '1';
+        // Shadow word appears at the tapped zone location
+        const tapY = figY + z.centerY * figH;
+        ceremonyEl.style.top = (tapY / H * 100).toFixed(1) + '%';
+        ceremonyEl.style.opacity = '1';
+        ceremonyEl.style.color = 'rgba(220,200,240,0.92)';
+        ceremonyEl.style.textShadow = '0 0 40px rgba(180,160,200,0.55)';
 
-        // Watermark brightens briefly then fades
-        watermarkEl.style.transition = 'opacity 0.4s ease';
         watermarkEl.style.opacity = '0';
-
-        // Hide question label
-        qEl.style.transition = 'opacity 0.8s ease';
         qEl.style.opacity = '0';
 
-        // Somatic pause — 2s of the zone glowing, then transition
+        // After 2.2s — figure dissolves, transition
         setTimeout(() => {
-          echoEl.style.transition = 'opacity 1.2s ease';
-          echoEl.style.opacity = '0';
+          ceremonyEl.style.transition = 'opacity 1.4s ease, color 1s ease, text-shadow 1s ease';
+          ceremonyEl.style.opacity = '0';
+          fc.style.opacity = '0'; // canvas fades = body-to-orb dissolve
+
           setTimeout(() => {
             cancelAnimationFrame(figRafId);
             decBodySpot = z.key;
-            // If API key exists — enter dissolution chamber first
+            const mainCv = document.getElementById('cv');
+            if (mainCv) { mainCv.style.transition = 'opacity 0.8s ease'; mainCv.style.opacity = '1'; }
             const apiKey = localStorage.getItem('field_api_key');
             if (apiKey) {
               startDissolutionChamber();
             } else {
               startDecAcknowledge();
             }
-          }, 700);
-        }, 2000);
+          }, 900);
+        }, 2200);
       });
       hitBtn.addEventListener('touchend', e => { e.preventDefault(); hitBtn.click(); });
-
-      // Staggered fade in
-      hitBtn.style.opacity = '0';
       wrap.appendChild(hitBtn);
-      setTimeout(() => { hitBtn.style.transition = 'opacity 0.6s ease'; hitBtn.style.opacity = '1'; }, 80 * idx + 200);
     });
 
     return; // decohere path done
@@ -3352,6 +3392,108 @@ function showDecBodyMap() {
 }
 
 // ══════════════════════════════════════
+// ══════════════════════════════════════
+// AI INTEGRATION — Three movements
+// ══════════════════════════════════════
+
+const OBSERVE_AI_SYSTEM = `You are a field mirror. The person has just completed a mindfulness noting session — paying attention to which sense was present and whether it felt pleasant, unpleasant, or neutral.
+
+You receive their note log. Your role is to reflect one quiet pattern back — nothing more.
+
+Rules:
+- One response only. No conversation.
+- Two sentences maximum. Often one is enough.
+- Name what you actually see in the data — a pattern, a frequency, a leaning.
+- Do not interpret why. Do not advise. Do not ask questions.
+- Speak in plain, quiet language. No metaphor, no poetry.
+- If the log is too short to see a pattern (fewer than 3 notes), respond only with: "Not enough yet. Keep noting."
+- Never use the words: mindfulness, practice, awareness, meditation, wellbeing.
+- You are a mirror, not a guide.`;
+
+const COLLAPSE_AI_SYSTEM = `You are a field amplifier. The person has chosen a quantum state — a way of being they want to collapse into. They are about to breathe it into existence.
+
+You receive the state name and an imagination prompt they were given. Your role is to make it feel more reachable — not by explaining it, but by locating it in their actual life.
+
+Rules:
+- One response only. No conversation.
+- Two sentences maximum. First grounds it in reality. Second opens toward the breath.
+- Speak with quiet confidence. This state is real and available.
+- Do not use conditional language — not "maybe", "perhaps", "you might". State it as fact.
+- Do not repeat the imagination prompt back to them.
+- Never use the words: manifest, attract, visualise, affirmation, law of attraction, positive thinking.
+- You are not cheerleading. You are confirming what is already true.`;
+
+// Called after noting session completes — passes note log to AI, shows mirror line
+async function runObserveAI(noteLog) {
+  const apiKey = localStorage.getItem('field_api_key');
+  if (!apiKey || !noteLog || noteLog.length === 0) return;
+
+  const mirrorEl = document.getElementById('obsCohAI');
+  if (!mirrorEl) return;
+
+  const logText = noteLog.map((n,i) => `${i+1}. ${n}`).join('\n');
+  const userMsg = `Session note log (${noteLog.length} notes):\n${logText}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 120,
+        system: OBSERVE_AI_SYSTEM,
+        messages: [{ role: 'user', content: userMsg }]
+      })
+    });
+    const data = await res.json();
+    if (data.content && data.content[0]) {
+      const text = data.content[0].text.trim();
+      mirrorEl.textContent = text;
+      setTimeout(() => { mirrorEl.style.color = 'rgba(240,230,208,.72)'; }, 400);
+    }
+  } catch(e) { /* fail silently */ }
+}
+
+// Called when collapse pre-breath stage shows — passes state + imagination to AI
+async function runCollapseAI(stateName, imagPrompt) {
+  const apiKey = localStorage.getItem('field_api_key');
+  if (!apiKey) return;
+
+  const ampEl = document.getElementById('collapseAI');
+  if (!ampEl) return;
+
+  const userMsg = `State chosen: "${stateName}"\nImagination prompt given: "${imagPrompt}"`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 120,
+        system: COLLAPSE_AI_SYSTEM,
+        messages: [{ role: 'user', content: userMsg }]
+      })
+    });
+    const data = await res.json();
+    if (data.content && data.content[0]) {
+      const text = data.content[0].text.trim();
+      ampEl.textContent = text;
+      setTimeout(() => { ampEl.style.color = 'rgba(240,230,208,.72)'; }, 600);
+    }
+  } catch(e) { /* fail silently */ }
+}
+
 // DISSOLUTION CHAMBER — AI Socratic mirror
 // Slots between body map and breath
 // 3 exchanges max · field-language · sparse
@@ -3915,11 +4057,12 @@ function startLandingScreen() {
 
   // Particle state — small, blurry, drifting
   let px = innerWidth * 0.5;
-  let py = innerHeight * 0.45;
-  let vx = (Math.random() - 0.5) * 0.4;
-  let vy = (Math.random() - 0.5) * 0.4;
+  let py = innerHeight * 0.47;
+  let vx = (Math.random() - 0.5) * 0.6;
+  let vy = (Math.random() - 0.5) * 0.6;
   let phase = Math.random() * Math.PI * 2;
-  let phV = 0.008 + Math.random() * 0.006;
+  let phV = 0.012 + Math.random() * 0.008;
+  let pulsePhase = 0; // secondary pulse for vibration
 
   // Appearance state — starts tiny/blurry, sharpens on tap
   let focusLevel = 0;   // 0 = blurry/dim, 1 = sharp/bright
@@ -4003,11 +4146,13 @@ function startLandingScreen() {
         return;
       }
     } else {
-      // Normal drifting particle — same scale as app SpParticles
-      const coreR = (9 + focusLevel * 6) * breathe;
-      const glowR = coreR * (4.5 - focusLevel * 2); // wide hazy glow when unfocused, tighter when focused
-      const coreAlpha = 0.32 + focusLevel * 0.55;
-      const glowAlpha = 0.10 + focusLevel * 0.20;
+      // Normal drifting particle — alive, pulsing, vibrating
+      pulsePhase += 0.031;
+      const vibrate = 1 + 0.08 * Math.sin(pulsePhase * 3.7) + 0.04 * Math.sin(pulsePhase * 7.1);
+      const coreR = (18 + focusLevel * 10) * breathe * vibrate;
+      const glowR = coreR * (5.5 - focusLevel * 2);
+      const coreAlpha = 0.62 + focusLevel * 0.35;
+      const glowAlpha = 0.22 + focusLevel * 0.25 + 0.06 * Math.sin(pulsePhase);
 
       // Soft gaussian glow
       const g = lc.createRadialGradient(px, py, 0, px, py, glowR);
