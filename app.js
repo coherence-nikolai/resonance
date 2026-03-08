@@ -1101,6 +1101,67 @@ function playDecohereRelease() {
     o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0+7);
   });
 }
+
+// Witness breath audio — violet palette, interior, dissolving
+// Inhale: rising minor third from 174Hz (solfeggio liberation), soft triangle waves
+function playWitnessInhale() {
+  if (!audioCtx) return;
+  // Triangle waves — softer, more interior than collapse sine
+  [[174, 0], [261, 0.12], [348, 0.22]].forEach(([f, delay]) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(f * 0.92, audioCtx.currentTime + delay);
+    o.frequency.linearRampToValueAtTime(f, audioCtx.currentTime + delay + 4.2);
+    const t0 = audioCtx.currentTime + delay;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.022 - delay * 0.025, t0 + 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 5.5);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 6);
+  });
+  // Very soft noise — like being breathed rather than breathing
+  try {
+    const bufLen = audioCtx.sampleRate * 5;
+    const buf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const filt = audioCtx.createBiquadFilter();
+    filt.type = 'lowpass'; filt.frequency.value = 400; filt.Q.value = 0.6;
+    const g2 = audioCtx.createGain();
+    g2.gain.setValueAtTime(0, audioCtx.currentTime);
+    g2.gain.linearRampToValueAtTime(0.007, audioCtx.currentTime + 1.8);
+    g2.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 5.2);
+    src.connect(filt); filt.connect(g2); g2.connect(audioCtx.destination);
+    src.start(); src.stop(audioCtx.currentTime + 5.5);
+  } catch(e) {}
+}
+
+// Exhale: slow descending — shadow releasing, minor quality
+function playWitnessExhale() {
+  if (!audioCtx) return;
+  [[348, 0], [261, 0.14], [174, 0.26]].forEach(([f, delay]) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(f, audioCtx.currentTime + delay);
+    o.frequency.exponentialRampToValueAtTime(f * 0.82, audioCtx.currentTime + delay + 5);
+    const t0 = audioCtx.currentTime + delay;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.026 - delay * 0.025, t0 + 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 6.2);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 6.5);
+  });
+  // Low dissolve chord — the shadow letting go
+  [174, 219].forEach((f, i) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    const t0 = audioCtx.currentTime + i * 0.08;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.038 - i * 0.01, t0 + 0.3);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 6.5);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 7);
+  });
+}
 function playScatterSound() {
   if (!audioCtx) return;
   const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.3, audioCtx.sampleRate);
@@ -2995,8 +3056,10 @@ function enterStill() {
   spParticles.forEach(p => { p.targetAlpha = 0.15 + Math.random()*0.1; });
 
   document.getElementById('stillTxt').innerHTML = t.stillTxt.replace(/\n/g,'<br>');
-  document.getElementById('stillBack').textContent = t.retBtn;
-  document.getElementById('stillBack').onclick = () => {
+  const stillBackEl = document.getElementById('stillBack');
+  stillBackEl.textContent = t.retBtn;
+  stillBackEl.style.opacity = '0.28'; // dim until AI responds, but always tappable
+  stillBackEl.onclick = () => {
     saveThreadLine();
     goHome();
   };
@@ -3110,9 +3173,40 @@ function enterStill() {
         threadWrap.style.pointerEvents = 'auto';
       }, 4000);
 
+      // Still AI response element — appears below input after submit
+      const stillResponseEl = document.createElement('div');
+      stillResponseEl.style.cssText = `font-size:clamp(13px,3.2vw,16px);font-style:italic;
+        font-family:'Cormorant Garamond',Georgia,serif;letter-spacing:.05em;
+        color:rgba(201,169,110,.82);text-align:center;max-width:280px;
+        line-height:1.6;opacity:0;transition:opacity 0s;margin-top:4px;`;
+      threadWrap.appendChild(stillResponseEl);
+
+      const submitThread = () => {
+        const val = threadInput.value.trim();
+        if (!val) return;
+        saveThreadLine();
+        // Fire AI affirmation
+        const apiKey = lsGet('field_api_key');
+        if (apiKey) {
+          threadInput.style.opacity = '0.4';
+          threadInput.disabled = true;
+          runStillAI(val, stillResponseEl);
+          // After AI response has time to land, fade home button in
+          setTimeout(() => {
+            const sb = document.getElementById('stillBack');
+            if (sb) { sb.style.transition = 'opacity 1.4s ease'; sb.style.opacity = '1'; }
+          }, 3500);
+        } else {
+          goHome();
+        }
+      };
+
       // Save on enter
       threadInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); saveThreadLine(); goHome(); }
+        if (e.key === 'Enter') { e.preventDefault(); submitThread(); }
+      });
+      threadInput.addEventListener('blur', () => {
+        if (threadInput.value.trim()) submitThread();
       });
     }
   });
@@ -4497,6 +4591,47 @@ Rules:
 - Never use the words: mindfulness, practice, awareness, meditation, wellbeing.
 - You are a mirror, not a guide.`;
 
+const STILL_AI_SYSTEM = `You are the field at rest. The person has just completed a contemplative session and written one true thing they noticed.
+
+Your role: offer a single line of quiet affirmation — not praise, not analysis. Just a reflection that says: this is real, this matters, you were here.
+
+Rules:
+- One sentence only. Never two.
+- Sparse and precise. Field-language: presence, landing, arriving, being.
+- Do not begin with "I". Do not use "you should", "remember", "always".
+- No spiritual jargon. No gratitude prompts. No exclamation marks.
+- Speak as if the field itself is acknowledging what was witnessed.
+- The tone is: quiet, certain, close.`;
+
+async function runStillAI(threadText, responseEl) {
+  const apiKey = lsGet('field_api_key');
+  if (!apiKey) return;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 60,
+        system: STILL_AI_SYSTEM,
+        messages: [{ role: 'user', content: threadText }]
+      })
+    });
+    const data = await res.json();
+    if (data.content && data.content[0]) {
+      const text = data.content[0].text.trim();
+      responseEl.textContent = text;
+      responseEl.style.transition = 'opacity 2.2s ease';
+      setTimeout(() => { responseEl.style.opacity = '1'; }, 200);
+    }
+  } catch(e) {}
+}
+
 const COLLAPSE_AI_SYSTEM = `You are a field amplifier. The person has chosen a quantum state — a way of being they want to collapse into. They are about to breathe it into existence.
 
 You receive the state name and an imagination prompt they were given. Your role is to make it feel more reachable — not by explaining it, but by locating it in their actual life.
@@ -5094,6 +5229,7 @@ function startDecBreath(displayName) {
         window._decOrb.wordTargetAlpha = 0.45;
       }
       dronePitch(true);
+      playWitnessInhale();
     }, 100);
 
     // Hold
@@ -5105,6 +5241,7 @@ function startDecBreath(displayName) {
       if (navigator.vibrate) navigator.vibrate(22);
       dronePitch(false);
       if (window._decOrb) window._decOrb.startPhase('exhale');
+      playWitnessExhale();
     }, 6200);
 
     // Dot lights at end of exhale
