@@ -2772,7 +2772,7 @@ function showCollapseStage(n) {
         ampEl.style.pointerEvents = 'none';
         const cs4 = document.getElementById('cs4');
         if (cs4 && ampEl.parentNode !== cs4) cs4.appendChild(ampEl);
-        ampEl.style.cssText = 'position:absolute;bottom:clamp(14px,5vh,32px);left:50%;transform:translateX(-50%);width:90%;max-width:340px;text-align:center;z-index:20;pointer-events:none;opacity:0;color:rgba(240,230,208,.78);font-size:clamp(13px,3.4vw,16px);font-weight:300;font-style:italic;letter-spacing:.06em;line-height:1.7;transition:opacity 1.8s ease;font-family:\'Cormorant Garamond\',Georgia,serif;';
+        ampEl.style.cssText = 'position:absolute;bottom:clamp(110px,20vh,160px);left:50%;transform:translateX(-50%);width:90%;max-width:340px;text-align:center;z-index:20;pointer-events:none;opacity:0;color:rgba(240,230,208,.78);font-size:clamp(13px,3.4vw,16px);font-weight:300;font-style:italic;letter-spacing:.06em;line-height:1.7;transition:opacity 1.8s ease;font-family:\'Cormorant Garamond\',Georgia,serif;';
         // Mark as waiting — will only show after breath cycle 1 completes
         ampEl.dataset.waitingForBreath = '1';
       }
