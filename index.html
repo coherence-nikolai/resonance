@@ -155,7 +155,7 @@ html,body { margin:0;padding:0;width:100%;height:100%;background:var(--bg);
   position:absolute;bottom:36px;left:50%;transform:translateX(-50%);white-space:nowrap;}
 
 /* OBSERVE */
-#s-observe{cursor:default;padding:0;}
+#s-observe{cursor:default;padding:0;position:relative;overflow:hidden;}
 #meter{display:flex;gap:6px;align-items:center;z-index:20;}
 .mdot{width:4px;height:4px;border-radius:50%;background:rgba(201,169,110,.18);
   transition:background 1.5s ease,box-shadow 1.5s ease;}
@@ -398,10 +398,11 @@ html,body { margin:0;padding:0;width:100%;height:100%;background:var(--bg);
 
 /* Witness breath */
 #s-dec-breath{gap:0;text-align:center;cursor:default;overflow:hidden;}
-#dec-btext{position:relative;
+#dec-btext{position:fixed;left:50%;transform:translateX(-50%);
+  top:calc(50% - clamp(90px,18vw,120px));
   font-size:var(--fh);font-weight:300;letter-spacing:.10em;
-  color:rgba(240,230,208,.72);height:48px;display:flex;align-items:center;justify-content:center;
-  width:100%;max-width:320px;text-align:center;margin-bottom:24px;
+  color:rgba(240,230,208,.72);display:flex;align-items:center;justify-content:center;
+  width:100%;max-width:320px;text-align:center;
   transition:opacity 0.7s ease;opacity:0;overflow:hidden;line-height:1.4;
   z-index:16;pointer-events:none;}
 #dec-bp-wrap{position:relative;
@@ -619,7 +620,6 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
 .tone-chip[data-tone-key="neutral"].active .tone-chip-symbol{color:rgba(220,215,205,.9);}
 
 /* Two-screen noting flow */
-#s-observe{position:relative;overflow:hidden;}
 .noting-phase{position:absolute;inset:0;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:clamp(16px,4vh,28px);
   padding:clamp(80px,18vh,110px) clamp(24px,6vw,40px) clamp(60px,14vh,80px);

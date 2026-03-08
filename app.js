@@ -1104,6 +1104,12 @@ function goHome() {
   currentMode = 'home';
   clearAllBreath(); clearObserver(); clearAllDec();
   clearGhosts();
+  // Clear witness/decohere state
+  const grid = document.getElementById('shadowGrid');
+  if (grid) grid.innerHTML = '';
+  const fc = document.getElementById('fc');
+  if (fc) { fc.style.opacity = '0'; }
+  if (window._decOrb) { window._decOrb = null; }
   restoreCircadianPalette(); // restore from any movement-specific palette
   fadeDrone(true, 1.5);
   particlesHidden = false; collapseStage = 0; breathRunning = false; bgDimTarget = 1;
@@ -1881,6 +1887,9 @@ function reachObsCoherence() {
   clearInterval(attentionTimer); clearInterval(microToneTimer);
   clearInterval(motionCheckInterval); clearInterval(obsTimerInterval);
   playObsCoherenceTone(); fadeDrone(true, 3);
+  // Back button always available
+  showBackBtn();
+  document.getElementById('backBtn').onclick = () => goHome();
 
   ['obs-signals','meter','scatter-text','obs-hint-txt','obs-timer',
    'obs-timer-noting','noteCounter','senseRow','toneRow','noting-progress','stormWord'].forEach(id => {
@@ -1901,8 +1910,8 @@ function reachObsCoherence() {
     : TRANSLATIONS[lang].obsCoherenceWord;
   const cohLine = isNoting
     ? (lang === 'en'
-        ? 'You named what was present.\nThe field received it.\nThat is the practice.'
-        : 'Nombraste lo que estaba presente.\nEl campo lo recibió.\nEsa es la práctica.')
+        ? 'You named what was present.\nThe field received it.\nThis is the practice.'
+        : 'Nombraste lo que estaba presente.\nEl campo lo recibió.\nEso es suficiente.')
     : TRANSLATIONS[lang].obsCoherenceLine;
 
   setTimeout(() => {
@@ -3851,53 +3860,36 @@ function startDecAcknowledge() {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       wordEl.style.transition = 'color 3s ease, opacity 2.5s ease';
       ackLayer.style.transition = 'opacity 1.2s ease';
-
-      // Word fades in slowly
       setTimeout(() => {
         wordEl.style.opacity = '1';
         wordEl.style.textShadow = '0 0 48px rgba(240,220,180,.35)';
       }, 300);
       setTimeout(() => { ackLayer.style.opacity = '1'; }, 400);
 
-      // "just this" whisper appears at 3s
-      let justThisEl = document.createElement('div');
-      justThisEl.style.cssText = `position:fixed;bottom:clamp(100px,20vh,140px);left:50%;
+      // Single 'breathe' prompt — appears at 4s, tap to begin
+      let readyEl = document.createElement('div');
+      readyEl.style.cssText = `position:fixed;bottom:clamp(70px,14vh,110px);left:50%;
         transform:translateX(-50%);font-size:clamp(13px,3.2vw,16px);letter-spacing:.28em;
         color:rgba(240,230,208,.0);font-weight:300;font-family:'Plus Jakarta Sans',sans-serif;
-        text-transform:lowercase;pointer-events:none;z-index:52;
-        transition:color 2s ease;white-space:nowrap;`;
-      justThisEl.textContent = lang === 'en' ? 'just this' : 'solo esto';
-      document.body.appendChild(justThisEl);
-      setTimeout(() => { justThisEl.style.color = 'rgba(240,230,208,.28)'; }, 3000);
-
-      // "when ready, breathe" hint — tap to begin early
-      let readyEl = document.createElement('div');
-      readyEl.style.cssText = `position:fixed;bottom:clamp(60px,12vh,90px);left:50%;
-        transform:translateX(-50%);font-size:clamp(12px,3vw,14px);letter-spacing:.18em;
-        color:rgba(240,230,208,.0);font-weight:300;font-family:'Plus Jakarta Sans',sans-serif;
-        text-transform:lowercase;cursor:pointer;z-index:52;padding:12px 24px;
-        transition:color 2s ease;white-space:nowrap;-webkit-tap-highlight-color:transparent;`;
-      readyEl.textContent = lang === 'en' ? 'when ready · breathe' : 'cuando estés listo · respira';
+        text-transform:lowercase;cursor:pointer;z-index:52;padding:14px 28px;
+        transition:color 2.5s ease;white-space:nowrap;-webkit-tap-highlight-color:transparent;`;
+      readyEl.textContent = lang === 'en' ? 'breathe' : 'respira';
       document.body.appendChild(readyEl);
-      setTimeout(() => { readyEl.style.color = 'rgba(240,230,208,.22)'; }, 5000);
+      setTimeout(() => { readyEl.style.color = 'rgba(240,230,208,.32)'; }, 4000);
 
       let breathStarted = false;
       const beginBreath = () => {
         if (breathStarted) return;
         breathStarted = true;
-        justThisEl.style.color = 'rgba(240,230,208,.0)';
         readyEl.style.color = 'rgba(240,230,208,.0)';
-        setTimeout(() => { justThisEl.remove(); readyEl.remove(); }, 2100);
+        setTimeout(() => { if (readyEl.parentNode) readyEl.remove(); }, 1800);
         startDecBreath(displayName);
       };
 
       readyEl.addEventListener('click', beginBreath);
       readyEl.addEventListener('touchend', e => { e.preventDefault(); beginBreath(); });
-
-      // Auto-start at 10s if user hasn't tapped
-      const autoTimer = setTimeout(beginBreath, 10000);
-      // Clean up if navigated away
-      readyEl._autoTimer = autoTimer;
+      // Auto-start at 9s
+      setTimeout(beginBreath, 9000);
     }));
   });
 }
@@ -4049,7 +4041,8 @@ function showDecEnd() {
     spParticles.forEach(p => { p.targetAlpha = 0.22 + Math.random()*0.2; });
   }, 600);
 
-  document.getElementById('decEndLine').textContent = t.decEndLine;
+  // decEndLine intentionally left empty — WITNESSED sentence is the complete close
+  document.getElementById('decEndLine').textContent = '';
   document.getElementById('decRetBtn').textContent = t.decRetBtn;
   document.getElementById('decAgainBtn').textContent = t.decAgainBtn;
 

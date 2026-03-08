@@ -201,7 +201,7 @@ const WITNESSED = {
     Tired:        "Tired was witnessed. Not fixed — seen.",
     Overwhelmed:  "You brought attention to Overwhelmed. That is the practice.",
     Disconnected: "Disconnected was not avoided. It was seen.",
-    Afraid:       "You stayed with Afraid. That is the whole practice."
+    Afraid:       "You stayed with Afraid. Nothing needed to be resolved."
   },
   es: {
     Angustiado:   "Angustiado fue visto. No apartaste la mirada.",
@@ -213,6 +213,6 @@ const WITNESSED = {
     Agotado:      "Agotado fue atestiguado. No arreglado — visto.",
     Sobrepasado:  "Trajiste atención a Sobrepasado. Esa es la práctica.",
     Desconectado: "Desconectado no fue evitado. Fue visto.",
-    Asustado:     "Te quedaste con Asustado. Esa es toda la práctica."
+    Asustado:     "Te quedaste con Asustado. Nada necesitaba resolverse."
   }
 };
