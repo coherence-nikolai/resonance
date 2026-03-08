@@ -430,33 +430,43 @@ class BreathOrb {
     // ── State word — centred IN the orb, breathes and vibrates ──
     if (this.wordText && this.wordAlpha > 0.01) {
       const wordA = this.wordAlpha * this.alpha;
-      const gi = this.wordGlowIntensity; // 0→1 across cycles
+      const gi = this.wordGlowIntensity;
+      const isViolet = this.c1 === '210,180,240'; // witness orb
 
-      // Font size grows with glow intensity and scales with orb size
-      const baseFontSize = Math.max(22, Math.min(this.MAX_RADIUS * 0.55, innerWidth * 0.13));
-      const fontSize = baseFontSize * (0.7 + gi * 0.5) * (this.wordScale !== undefined ? this.wordScale : 1);
+      // Font size smoothly tracks orb radius — no jumps from gi
+      const baseSize = Math.max(20, Math.min(this.MAX_RADIUS * 0.52, innerWidth * 0.12));
+      const breathScale = 0.72 + (this.dispRadius / Math.max(this.MAX_RADIUS, 1)) * 0.42;
+      const morphScale = this.wordScale !== undefined ? this.wordScale : 1;
+      const fontSize = baseSize * breathScale * morphScale;
       if (fontSize < 2) return;
 
-      // Collapse: word softens on expand, sharpens on collapse
-      // Witness: word glows on inhale, fades on exhale — opposite blur logic
       const isExpanded = this.phase === 'inhale' || this.phase === 'hold';
-      const isViolet = this.c1 === '210,180,240';
       const wordBlur = isViolet
-        ? (isExpanded ? 0 : bl * 0.2)   // witness: sharp on inhale, slight blur on exhale fade
-        : (isExpanded ? bl * 0.35 : 0);  // collapse: blurred on expand
+        ? (isExpanded ? 0 : this.dispBlur * 0.15)
+        : (isExpanded ? this.dispBlur * 0.3 : 0);
 
       cx.save();
       if (wordBlur > 0.5) cx.filter = `blur(${wordBlur.toFixed(1)}px)`;
 
-      // Glow shadow — intensifies with each cycle and on exhale
-      const glowRadius = 12 + gi * 40;
-      const glowAlpha = 0.3 + gi * 0.7;
-      cx.shadowColor = `rgba(${c5},${(wordA * glowAlpha).toFixed(2)})`;
-      cx.shadowBlur = glowRadius;
+      const glowRadius = 10 + gi * 35;
+      const glowAlpha = 0.25 + gi * 0.75;
 
-      // Brightness increases across cycles
-      const bright = Math.round(200 + gi * 55);
-      const wordColor = `rgba(${bright + 15},${bright},${Math.max(0,bright - 50)},${wordA.toFixed(3)})`;
+      // Witness: carry the shadow-red hue into the orb
+      // Collapse: warm gold
+      let wordColor;
+      if (isViolet) {
+        // Red-to-amber gradient based on glow intensity
+        const r = Math.round(230 + gi * 10);
+        const g2 = Math.round(140 + gi * 40);
+        const b = Math.round(120 + gi * 20);
+        wordColor = `rgba(${r},${g2},${b},${wordA.toFixed(3)})`;
+        cx.shadowColor = `rgba(220,100,80,${(wordA * glowAlpha).toFixed(2)})`;
+      } else {
+        const bright = Math.round(200 + gi * 55);
+        wordColor = `rgba(${bright + 15},${bright},${Math.max(0,bright - 50)},${wordA.toFixed(3)})`;
+        cx.shadowColor = `rgba(${c5},${(wordA * glowAlpha).toFixed(2)})`;
+      }
+      cx.shadowBlur = glowRadius;
 
       cx.globalAlpha = wordA;
       cx.font = `300 ${fontSize.toFixed(1)}px 'Cormorant Garamond', Georgia, serif`;
@@ -464,16 +474,12 @@ class BreathOrb {
       cx.textBaseline = 'middle';
       cx.fillStyle = wordColor;
 
-      // Position: centre of orb + vibration offset
-      const wx = px;
-      const wy = py;
-      cx.fillText(this.wordText, wx, wy);
+      cx.fillText(this.wordText, px, py);
 
-      // Second pass for extra glow on high-intensity moments
       if (gi > 0.5) {
-        cx.shadowBlur = glowRadius * 2;
-        cx.globalAlpha = wordA * (gi - 0.5) * 0.6;
-        cx.fillText(this.wordText, wx, wy);
+        cx.shadowBlur = glowRadius * 1.8;
+        cx.globalAlpha = wordA * (gi - 0.5) * 0.5;
+        cx.fillText(this.wordText, px, py);
       }
 
       cx.shadowBlur = 0;
@@ -1415,19 +1421,19 @@ function goHome() {
       setTimeout(() => { initSpParticles(12); tryDrone(); }, 200);
     }
     tryDrone();
-    // Companion check-in — shows after 3+ sessions if API key present
-    setTimeout(() => maybeShowCompanion(), 1200);
+    // Companion check-in — disabled on auto-show, user can access via settings
+    // setTimeout(() => maybeShowCompanion(), 1200);
   });
   updateHomeCount();
   document.querySelectorAll('.movement').forEach(m => m.classList.remove('lit'));
 
-  // Guided entry hint — show for users who haven't done Collapse yet
+  // Guided entry hint — point new users to Observe first
   const hintEl = document.getElementById('guided-hint');
   const collapseCount = parseInt(lsGet('field_obs')||'0');
   if (hintEl) {
     const t = lang === 'en';
     if (collapseCount === 0) {
-      hintEl.textContent = t ? 'new here? · begin with ↑' : '¿nuevo aquí? · empieza con ↑';
+      hintEl.textContent = t ? 'new here? · begin with ◎' : '¿nuevo aquí? · empieza con ◎';
       setTimeout(() => { hintEl.style.opacity = '1'; }, 1800);
     } else {
       hintEl.style.opacity = '0';
@@ -1935,8 +1941,15 @@ function enterObserve() {
         return;
       }
     } else {
-      if (obsMode === 'kasina' && kasinaParticle) { kasinaParticle.targetAlpha = 1; }
-      else if (observeParticle) { observeParticle.targetAlpha = 0.9; }
+      if (obsMode === 'kasina') {
+        // Recreate if null (mode may have been switched on setup screen)
+        if (!kasinaParticle) {
+          kasinaParticle = new KasinaParticle();
+          kasinaParticle.alpha = 0;
+        }
+        kasinaParticle.targetAlpha = 1;
+        observeParticle = null;
+      } else if (observeParticle) { observeParticle.targetAlpha = 0.9; }
     }
 
     buildObsScreen();
@@ -2005,12 +2018,16 @@ function enterObserve() {
 function startObsTimer() {
   clearInterval(obsTimerInterval);
   const target = obsStorm ? 10 : 7;
-  // Heartbeat — re-assert back button every tick so nothing can hide it
+  // Heartbeat — re-assert back button every tick so nothing can hide it or lose its handler
   const assertBack = () => {
     const btn = document.getElementById('backBtn');
     if (btn && currentMode === 'observe') {
       btn.style.opacity = '1';
       btn.style.pointerEvents = 'all';
+      if (!btn._obsHandler) {
+        btn._obsHandler = () => goHome();
+        btn.onclick = btn._obsHandler;
+      }
     }
   };
   obsTimerInterval = setInterval(() => {
@@ -2340,6 +2357,9 @@ function clearObserver() {
   isStill = true; kasinaParticle = null;
   noteCount = 0; noteSense = ''; sessionNoteLog = [];
   clearTimeout(scatterTO);
+  // Clear back button handler flag so it gets reassigned cleanly next session
+  const btn = document.getElementById('backBtn');
+  if (btn) btn._obsHandler = null;
   const ring = document.getElementById('clarity-ring');
   if (ring) { ring.style.display = 'none'; ring.style.borderColor = 'rgba(201,169,110,0)'; ring.style.boxShadow = 'none'; }
 }
@@ -2963,6 +2983,19 @@ function enterStill() {
     goHome();
   };
 
+  // Still entry tone — single quiet fade: 432Hz barely audible
+  if (audioCtx) {
+    try {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = 432;
+      g.gain.setValueAtTime(0, audioCtx.currentTime);
+      g.gain.linearRampToValueAtTime(0.018, audioCtx.currentTime + 2.5);
+      g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 9);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 9.5);
+    } catch(e) {}
+  }
+
   showScreen('s-still', () => {
     // Whisper back the last thread line if one exists
     const lastThread = lsGet('field_thread', '');
@@ -3260,16 +3293,25 @@ function startDecohere() {
   }, 300);
   buildShadowGrid();
   const t = TRANSLATIONS[lang];
-  // Restore default padding/gap for shadow grid view
   const scr = document.getElementById('s-witness');
   if (scr) { scr.style.paddingTop = ''; scr.style.gap = ''; }
   const arrLine = document.getElementById('decArrivalLine');
   const arrSub  = document.getElementById('decArrivalSub');
-  arrLine.textContent = t.decArrivalLine; arrLine.style.opacity = '1';
-  arrSub.textContent  = t.decArrivalSub;  arrSub.style.opacity  = '1';
+  // Set content but keep hidden — fade in after screen transition to prevent double-render jump
+  arrLine.textContent = t.decArrivalLine;
+  arrSub.textContent  = t.decArrivalSub;
+  arrLine.style.transition = 'none'; arrLine.style.opacity = '0';
+  arrSub.style.transition  = 'none'; arrSub.style.opacity  = '0';
   const tapHint = document.getElementById('decTapHint');
   if (tapHint) tapHint.textContent = '';
-  showScreen('s-witness');
+  showScreen('s-witness', () => {
+    requestAnimationFrame(() => {
+      arrLine.style.transition = 'opacity 1.0s ease';
+      arrSub.style.transition  = 'opacity 1.0s ease';
+      setTimeout(() => { arrLine.style.opacity = '1'; }, 80);
+      setTimeout(() => { arrSub.style.opacity  = '1'; }, 320);
+    });
+  });
 }
 
 function buildShadowGrid() {
@@ -3291,6 +3333,11 @@ function buildShadowGrid() {
     const o = document.createElement('button');
     o.className = 'shadow-orb';
     o.style.opacity = '0';
+    // Individual vibration — random duration and delay so each word moves independently
+    const dur = (2.2 + Math.random() * 1.8).toFixed(2);
+    const delay = (Math.random() * -3).toFixed(2);
+    o.style.animationDuration = dur + 's';
+    o.style.animationDelay = delay + 's';
     o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
     o.textContent = displayName;
 
@@ -3402,8 +3449,10 @@ function showBodyMap(mode, payload) {
     // Remove padding constraints — full screen figure
     const scr = document.getElementById('s-witness');
     if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; }
-    grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);"></div>';
+    grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 1.2s ease;"></div>';
     wrap = document.getElementById('bodymapWrap');
+    // Fade in after a beat
+    setTimeout(() => { wrap.style.opacity = '1'; }, 80);
     // Hide main canvas during witness body map
     const mainCv = document.getElementById('cv');
     if (mainCv) mainCv.style.opacity = '0';
@@ -3897,6 +3946,19 @@ function showTonePicker(container, onSelect) {
 }
 
 function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComplete) {
+  // Clear any bleeding tap hints immediately
+  const decTapHint = document.getElementById('decTapHint');
+  if (decTapHint) decTapHint.textContent = '';
+  // Also clear the body map tapEl if present
+  const bodyWrap = document.getElementById('body-map-wrap');
+  if (bodyWrap) {
+    bodyWrap.querySelectorAll('div').forEach(d => {
+      if (d.textContent && (d.textContent.includes('tap the area') || d.textContent.includes('toca donde'))) {
+        d.style.opacity = '0';
+        setTimeout(() => { d.textContent = ''; }, 600);
+      }
+    });
+  }
   const hasSpeech = ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
   const apiKey = lsGet('field_api_key');
 
@@ -4580,6 +4642,11 @@ Your first question should go deeper into what they already named — not restat
   const oldLayer = document.getElementById('voice-sense-layer');
   if (oldLayer) { oldLayer.remove(); }
 
+  // Clear any bleeding tap hints
+  const decTapHint = document.getElementById('decTapHint');
+  if (decTapHint) decTapHint.textContent = '';
+  document.querySelectorAll('[id*="tapEl"], .dec-tap-hint').forEach(el => { el.textContent = ''; el.style.opacity = '0'; });
+
   showScreen('s-chamber', () => {
     setTimeout(() => { contextEl.style.opacity = '1'; }, 600);
     // Opening AI question arrives after a beat
@@ -5000,7 +5067,7 @@ function clearAllDec() {
 
 // ── WELCOME INTRO ──
 let wlcStep = 0;
-const WLC_TOTAL = 3;
+const WLC_TOTAL = 4;
 
 // ── LANDING PARTICLE SCREEN ──
 let landingRaf = null;
@@ -5248,6 +5315,10 @@ function buildWelcome() {
   document.getElementById('wlc1-big').innerHTML = t.welcomeCard1Big.replace(/\n/g,'<br>');
   document.getElementById('wlc1-small').innerHTML = t.welcomeCard1Small.replace(/\n/g,'<br>');
   document.getElementById('wlc2-big').innerHTML = t.welcomeCard2Big.replace(/\n/g,'<br>');
+  const wlc3big = document.getElementById('wlc3-big');
+  if (wlc3big) wlc3big.innerHTML = lang === 'en'
+    ? 'The field<br>is waiting.'
+    : 'El campo<br>te espera.';
   t.wlcMvLabels.forEach((l,i) => { const el = document.getElementById('wlc-ml'+i); if(el) el.textContent = l; });
   t.wlcMvHints.forEach((h,i) => { const el = document.getElementById('wlc-mh'+i); if(el) el.textContent = h; });
   document.getElementById('wlcEnterBtn').textContent = t.wlcEnterBtn;
