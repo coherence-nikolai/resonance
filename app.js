@@ -36,6 +36,7 @@ let breathRunning = false, breathCycle = 0, curStateName = '', spChosen = 0;
 let breathOrb = null;
 let collapseStage = 0, isTransitioning = false, particlesHidden = false;
 let screenTransitionToken = 0;
+let witnessFlowToken = 0;
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
 let currentMode = 'home';
 let audioEnabled = true;
@@ -1551,9 +1552,15 @@ function clearGhosts() {
 function goHome() {
   closeSettings();
   const cameFromDecohere = currentMode === 'witness-end' || currentMode === 'witness';
+  // Invalidate any pending witness timers / delayed handoffs before returning home.
+  witnessFlowToken++;
   currentMode = 'home';
   clearAllBreath(); clearObserver(); clearAllDec();
   stopStillDrone(1.0);
+
+  // Reset main canvas in case a movement dimmed or hid it.
+  const mainCv = document.getElementById('cv');
+  if (mainCv) { mainCv.style.opacity = ''; }
 
   // ── Still screen cleanup — prevent bleed-through on transition ──
   const stillCanvas = document.getElementById('still-canvas');
@@ -1572,7 +1579,27 @@ function goHome() {
   clearGhosts();
   // Clear witness/decohere state
   const grid = document.getElementById('shadowGrid');
-  if (grid) grid.innerHTML = '';
+  if (grid) {
+    grid.innerHTML = '';
+    grid.style.opacity = '';
+    grid.style.transition = '';
+    grid.style.cssText = '';
+  }
+  const decLine = document.getElementById('decArrivalLine');
+  const decSub = document.getElementById('decArrivalSub');
+  const decTap = document.getElementById('decTapHint');
+  [decLine, decSub, decTap].forEach(el => {
+    if (el) { el.style.opacity = ''; el.style.transition = ''; }
+  });
+  const witnessScreen = document.getElementById('s-witness');
+  if (witnessScreen) {
+    witnessScreen.style.opacity = '';
+    witnessScreen.style.transition = '';
+    witnessScreen.style.paddingTop = '';
+    witnessScreen.style.gap = '';
+  }
+  const bodymapWrap = document.getElementById('bodymapWrap');
+  if (bodymapWrap && bodymapWrap.parentNode) bodymapWrap.parentNode.removeChild(bodymapWrap);
   const fc = document.getElementById('fc');
   if (fc) { fc.style.opacity = '0'; }
   if (window._decOrb) { window._decOrb = null; }
@@ -3696,9 +3723,11 @@ function startDecohere() {
     tapHint.style.transition = 'none';
   }
 
+  const flowToken = ++witnessFlowToken;
   showScreen('s-witness', () => {
     // Bring in the supporting violet field after the first line has had room to land.
     setTimeout(() => {
+      if (flowToken !== witnessFlowToken || currentMode !== 'witness') return;
       initSpParticles(10);
       spParticles.forEach(p => {
         p.targetAlpha = 0.16 + Math.random()*0.12;
@@ -3708,21 +3737,22 @@ function startDecohere() {
     }, 760);
 
     requestAnimationFrame(() => {
+      if (flowToken !== witnessFlowToken || currentMode !== 'witness') return;
       arrLine.style.transition = 'opacity 1.15s ease';
       arrSub.style.transition  = 'opacity 1.05s ease';
       if (tapHint) tapHint.style.transition = 'opacity 0.9s ease';
-      setTimeout(() => { arrLine.style.opacity = '1'; }, 180);
-      setTimeout(() => { arrSub.style.opacity  = '1'; }, 920);
+      setTimeout(() => { if (flowToken === witnessFlowToken && currentMode === 'witness') arrLine.style.opacity = '1'; }, 180);
+      setTimeout(() => { if (flowToken === witnessFlowToken && currentMode === 'witness') arrSub.style.opacity  = '1'; }, 920);
       // Keep the first breath invitation out of the way until the opening text has settled.
-      if (tapHint) setTimeout(() => { tapHint.style.opacity = '1'; }, 1850);
+      if (tapHint) setTimeout(() => { if (flowToken === witnessFlowToken && currentMode === 'witness') tapHint.style.opacity = '1'; }, 1850);
     });
 
     // Delay the shadow words so the opening reads sequentially rather than stacked.
-    setTimeout(() => buildShadowGrid(), 1500);
+    setTimeout(() => { if (flowToken === witnessFlowToken && currentMode === 'witness') buildShadowGrid(flowToken); }, 1500);
   });
 }
 
-function buildShadowGrid() {
+function buildShadowGrid(flowToken = witnessFlowToken) {
   const grid = document.getElementById('shadowGrid');
   grid.innerHTML = '';
   grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
@@ -3733,7 +3763,7 @@ function buildShadowGrid() {
 
   grid.style.opacity = '0';
   grid.style.transition = 'opacity 1.35s ease';
-  setTimeout(() => { grid.style.opacity = '1'; }, 260);
+  setTimeout(() => { if (flowToken === witnessFlowToken && currentMode === 'witness') grid.style.opacity = '1'; }, 260);
 
   en.forEach((name, i) => {
     const displayName = lang === 'en' ? name : es[i];
@@ -3749,21 +3779,27 @@ function buildShadowGrid() {
     o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
     o.textContent = displayName;
 
-    setTimeout(() => { o.style.opacity = '1'; }, 80 * i + 200);
+    setTimeout(() => { if (flowToken === witnessFlowToken && currentMode === 'witness') o.style.opacity = '1'; }, 80 * i + 200);
 
     const go = () => {
+      if (flowToken !== witnessFlowToken || currentMode !== 'witness') return;
       if (audioCtx) playTap();
       decStateName = name; decStateNameES = es[i];
       grid.querySelectorAll('.shadow-orb').forEach(el => {
-        el.style.transition = 'opacity 0.5s ease, color 0.5s ease, border-color 0.5s ease';
-        el.style.opacity = el === o ? '1' : '0.06';
+        el.style.pointerEvents = 'none';
+        el.style.transition = 'opacity 0.58s ease, color 0.58s ease, border-color 0.58s ease, background 0.58s ease, transform 0.58s ease';
+        el.style.opacity = el === o ? '1' : '0.18';
         if (el === o) {
           el.style.color = 'rgba(240,204,136,1)';
           el.style.borderColor = 'rgba(201,169,110,.85)';
           el.style.background = 'rgba(201,169,110,.10)';
+          el.style.transform = 'scale(1.03)';
+        } else {
+          el.style.transform = 'scale(0.985)';
         }
       });
-      setTimeout(() => showDecBodyMap(), 700);
+      // Let the chosen word settle before the body handoff begins.
+      setTimeout(() => { if (flowToken === witnessFlowToken && currentMode === 'witness') showDecBodyMap(flowToken); }, 820);
     };
     o.addEventListener('click', go);
     o.addEventListener('touchend', e => { e.preventDefault(); go(); });
@@ -3776,7 +3812,7 @@ function buildShadowGrid() {
 // mode: 'witness' | 'collapse'
 // payload: shadow state name (witness) | state object (collapse)
 // ══════════════════════════════════════
-function showBodyMap(mode, payload) {
+function showBodyMap(mode, payload, flowToken = witnessFlowToken) {
   // For witness: replace shadow grid in s-decohere
   // For collapse: show s-bodymap screen
   const isDecohere = mode === 'witness';
@@ -3852,21 +3888,24 @@ function showBodyMap(mode, payload) {
     const grid = document.getElementById('shadowGrid');
     const line = document.getElementById('decArrivalLine');
     const sub  = document.getElementById('decArrivalSub');
-    if (line) { line.style.transition = 'opacity 0.4s ease'; line.style.opacity = '0'; }
-    if (sub)  { sub.style.transition  = 'opacity 0.4s ease'; sub.style.opacity  = '0'; }
+    const tap  = document.getElementById('decTapHint');
     const scr = document.getElementById('s-witness');
+    if (line) { line.style.transition = 'opacity 0.30s ease'; line.style.opacity = '0'; }
+    if (sub)  { sub.style.transition  = 'opacity 0.30s ease'; sub.style.opacity  = '0'; }
+    if (tap)  { tap.style.transition  = 'opacity 0.24s ease'; tap.style.opacity  = '0'; }
+    if (grid) { grid.style.transition = 'opacity 0.34s ease'; grid.style.opacity = '0'; }
     if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; }
-    // Fade witness screen out, then inject body map
-    if (scr) { scr.style.transition = 'opacity 0.5s ease'; scr.style.opacity = '0'; }
     setTimeout(() => {
-      grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 1.0s ease;"></div>';
+      if (flowToken !== witnessFlowToken || currentMode !== 'witness') return;
+      grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 0.8s ease;"></div>';
+      grid.style.opacity = '1';
+      grid.style.transition = 'none';
       wrap = document.getElementById('bodymapWrap');
-      if (scr) { scr.style.opacity = '1'; scr.style.transition = 'none'; }
       const mainCv = document.getElementById('cv');
       if (mainCv) mainCv.style.opacity = '0';
-      setTimeout(() => { if (wrap) wrap.style.opacity = '1'; }, 60);
+      requestAnimationFrame(() => { if (wrap && flowToken === witnessFlowToken && currentMode === 'witness') wrap.style.opacity = '1'; });
       buildDecohere();
-    }, 520);
+    }, 360);
   } else {
     // Collapse: use dedicated s-bodymap screen
     const screen = document.getElementById('s-bodymap');
@@ -4287,9 +4326,10 @@ function showBodyMap(mode, payload) {
   } // end buildDecohere
 }
 
-function showDecBodyMap() {
+function showDecBodyMap(flowToken = witnessFlowToken) {
   // Legacy wrapper — routes to shared showBodyMap
-  showBodyMap('witness', null);
+  if (flowToken !== witnessFlowToken || currentMode !== 'witness') return;
+  showBodyMap('witness', null, flowToken);
 }
 
 // ══════════════════════════════════════
