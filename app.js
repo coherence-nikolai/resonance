@@ -36,70 +36,6 @@ let breathRunning = false, breathCycle = 0, curStateName = '', spChosen = 0;
 let breathOrb = null;
 let collapseStage = 0, isTransitioning = false, particlesHidden = false;
 let screenTransitionToken = 0;
-let activityToken = 0;
-const activityTimeMap = new Map();
-function ensureActivityBucket(token) {
-  if (!activityTimeMap.has(token)) activityTimeMap.set(token, { timeouts: new Set(), intervals: new Set() });
-  return activityTimeMap.get(token);
-}
-function clearTrackedActivityTimers(token) {
-  const bucket = activityTimeMap.get(token);
-  if (!bucket) return;
-  bucket.timeouts.forEach(id => { try { window.__fieldNativeClearTimeout(id); } catch(e) {} });
-  bucket.intervals.forEach(id => { try { window.__fieldNativeClearInterval(id); } catch(e) {} });
-  activityTimeMap.delete(token);
-}
-const nextActivityToken = () => {
-  const prev = activityToken;
-  activityToken += 1;
-  clearTrackedActivityTimers(prev);
-  ensureActivityBucket(activityToken);
-  return activityToken;
-};
-const isCurrentActivity = (token) => token === activityToken;
-window.__fieldNativeSetTimeout = window.setTimeout.bind(window);
-window.__fieldNativeClearTimeout = window.clearTimeout.bind(window);
-window.__fieldNativeSetInterval = window.setInterval.bind(window);
-window.__fieldNativeClearInterval = window.clearInterval.bind(window);
-window.setTimeout = function(cb, delay, ...args) {
-  const token = activityToken;
-  const bucket = ensureActivityBucket(token);
-  let id = null;
-  id = window.__fieldNativeSetTimeout(() => {
-    bucket.timeouts.delete(id);
-    if (!isCurrentActivity(token)) return;
-    if (typeof cb === 'function') cb(...args);
-    else try { Function(cb)(); } catch(e) {}
-  }, delay);
-  bucket.timeouts.add(id);
-  return id;
-};
-window.clearTimeout = function(id) {
-  activityTimeMap.forEach(bucket => bucket.timeouts.delete(id));
-  return window.__fieldNativeClearTimeout(id);
-};
-window.setInterval = function(cb, delay, ...args) {
-  const token = activityToken;
-  const bucket = ensureActivityBucket(token);
-  const id = window.__fieldNativeSetInterval(() => {
-    if (!isCurrentActivity(token)) return;
-    if (typeof cb === 'function') cb(...args);
-    else try { Function(cb)(); } catch(e) {}
-  }, delay);
-  bucket.intervals.add(id);
-  return id;
-};
-window.clearInterval = function(id) {
-  activityTimeMap.forEach(bucket => bucket.intervals.delete(id));
-  return window.__fieldNativeClearInterval(id);
-};
-function activityTimeout(token, cb, delay) {
-  return window.__fieldNativeSetTimeout(() => { if (!isCurrentActivity(token)) return; cb(); }, delay);
-}
-function activityFrame(token, cb) {
-  return requestAnimationFrame(() => { if (!isCurrentActivity(token)) return; cb(); });
-}
-ensureActivityBucket(activityToken);
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
 let currentMode = 'home';
 let audioEnabled = true;
@@ -1616,7 +1552,6 @@ function goHome() {
   closeSettings();
   const cameFromDecohere = currentMode === 'witness-end' || currentMode === 'witness';
   currentMode = 'home';
-  const homeToken = nextActivityToken(); // immediately invalidates stale activity callbacks
   clearAllBreath(); clearObserver(); clearAllDec();
   stopStillDrone(1.0);
 
@@ -1638,18 +1573,6 @@ function goHome() {
   // Clear witness/decohere state
   const grid = document.getElementById('shadowGrid');
   if (grid) grid.innerHTML = '';
-  const decArrivalLine = document.getElementById('decArrivalLine');
-  if (decArrivalLine) { decArrivalLine.style.transition = 'none'; decArrivalLine.style.opacity = '0'; }
-  const decArrivalSub = document.getElementById('decArrivalSub');
-  if (decArrivalSub) { decArrivalSub.style.transition = 'none'; decArrivalSub.style.opacity = '0'; }
-  const decTapHint = document.getElementById('decTapHint');
-  if (decTapHint) decTapHint.textContent = '';
-  const lingeringBodyMap = document.getElementById('bodymapWrap');
-  if (lingeringBodyMap && lingeringBodyMap.parentNode) lingeringBodyMap.parentNode.removeChild(lingeringBodyMap);
-  const lingeringVoiceLayer = document.getElementById('voice-sense-layer');
-  if (lingeringVoiceLayer && lingeringVoiceLayer.parentNode) lingeringVoiceLayer.parentNode.removeChild(lingeringVoiceLayer);
-  const lingeringReady = document.getElementById('decReadyEl');
-  if (lingeringReady && lingeringReady.parentNode) lingeringReady.parentNode.removeChild(lingeringReady);
   const fc = document.getElementById('fc');
   if (fc) { fc.style.opacity = '0'; }
   if (window._decOrb) { window._decOrb = null; }
@@ -1672,7 +1595,6 @@ function goHome() {
   if (stormAutoExitTimer) { clearTimeout(stormAutoExitTimer); stormAutoExitTimer = null; }
 
   showScreen('s-home', () => {
-    if (!isCurrentActivity(homeToken)) return;
     // Reset still screen for next entry
     const stillWhisper = document.getElementById('still-whisper');
     if (stillWhisper) { stillWhisper.style.opacity = '0'; }
@@ -1685,7 +1607,7 @@ function goHome() {
 
     document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
     if (cameFromDecohere) {
-      activityTimeout(homeToken, () => {
+      setTimeout(() => {
         spParticles = Array.from({length:12}, (_,i) => new SpParticle(i,12));
         spParticles.forEach(p => {
           p._flickering = false;
@@ -1694,25 +1616,25 @@ function goHome() {
           p.targetAlpha = 0;
           p.targetClarity = 0;
         });
-        activityTimeout(homeToken, () => {
+        setTimeout(() => {
           spParticles.forEach(p => { p.targetAlpha = 0.42+Math.random()*0.22; });
         }, 300);
         // Pulse movement glyphs once — gentle acknowledgement
-        activityTimeout(homeToken, () => {
+        setTimeout(() => {
           document.querySelectorAll('.movement').forEach((m, i) => {
-            activityTimeout(homeToken, () => {
+            setTimeout(() => {
               m.classList.add('lit');
-              activityTimeout(homeToken, () => m.classList.remove('lit'), 1200);
+              setTimeout(() => m.classList.remove('lit'), 1200);
             }, i * 180);
           });
         }, 1800);
       }, 100);
     } else {
-      activityTimeout(homeToken, () => { initSpParticles(12); tryDrone(); }, 200);
+      setTimeout(() => { initSpParticles(12); tryDrone(); }, 200);
     }
     tryDrone();
     // Companion check-in — disabled on auto-show, user can access via settings
-    // activityTimeout(homeToken, () => maybeShowCompanion(), 1200);
+    // setTimeout(() => maybeShowCompanion(), 1200);
   });
   updateHomeCount();
   document.querySelectorAll('.movement').forEach(m => m.classList.remove('lit'));
@@ -1724,7 +1646,7 @@ function goHome() {
     const t = lang === 'en';
     if (collapseCount === 0) {
       hintEl.textContent = t ? 'new here? · begin with ◎' : '¿nuevo aquí? · empieza con ◎';
-      activityTimeout(homeToken, () => { hintEl.style.opacity = '1'; }, 1800);
+      setTimeout(() => { hintEl.style.opacity = '1'; }, 1800);
     } else {
       hintEl.style.opacity = '0';
     }
@@ -1744,11 +1666,11 @@ function goHome() {
       : (lang === 'en' ? `session ${collapseCount + 1}` : `sesión ${collapseCount + 1}`);
     whisperEl.textContent = sessionLabel;
     document.body.appendChild(whisperEl);
-    activityTimeout(homeToken, () => { whisperEl.style.opacity = '1'; }, 2800);
-    activityTimeout(homeToken, () => { whisperEl.style.opacity = '0'; }, 7000);
-    activityTimeout(homeToken, () => { if (whisperEl.parentNode) whisperEl.remove(); }, 9000);
+    setTimeout(() => { whisperEl.style.opacity = '1'; }, 2800);
+    setTimeout(() => { whisperEl.style.opacity = '0'; }, 7000);
+    setTimeout(() => { whisperEl.remove(); }, 9000);
   }
-  activityTimeout(homeToken, () => {
+  setTimeout(() => {
     const obs = parseInt(lsGet('field_obs')||'0');
     const dec = parseInt(lsGet('field_obs_witness')||'0');
     const obv = parseInt(lsGet('field_obs_observe')||'0');
@@ -1761,7 +1683,7 @@ function goHome() {
       const decEl = document.getElementById('mv-witness');
       if (decEl) {
         decEl.classList.add('just-released');
-        activityTimeout(homeToken, () => { if (decEl) decEl.classList.remove('just-released'); }, 180000);
+        setTimeout(() => { if (decEl) decEl.classList.remove('just-released'); }, 180000);
       }
     }
   }, 800);
@@ -1999,7 +1921,6 @@ function updateClarityRing() {
 }
 
 function startObserve() {
-  nextActivityToken();
   if (navigator.vibrate) navigator.vibrate(18);
   currentMode = 'observe';
   showBackBtn(); // [UX1] shown immediately, before any field activation
@@ -2204,7 +2125,6 @@ function setObsTime(mins) {
 }
 
 function enterObserve() {
-  nextActivityToken();
   if (enterObserve._running) return;
   enterObserve._running = true;
   setTimeout(() => { enterObserve._running = false; }, 2000);
@@ -2880,7 +2800,6 @@ function cancelCharge() {
 }
 
 function startCollapse() {
-  nextActivityToken();
   if (navigator.vibrate) navigator.vibrate(18);
   initAudio();
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
@@ -3297,7 +3216,6 @@ function goStill() {
 }
 
 function enterStill() {
-  nextActivityToken();
   const t = TRANSLATIONS[lang];
   currentMode = 'still';
   showBackBtn();
@@ -3531,7 +3449,6 @@ let stormActiveWords = [];
 
 function startStormScreen() {
   currentMode = 'storm';
-  nextActivityToken();
   showBackBtn();
   document.getElementById('backBtn').onclick = () => exitStormScreen();
 
@@ -3749,7 +3666,6 @@ function getDecBodyPos(spot) {
 }
 
 function startDecohere() {
-  const witnessToken = nextActivityToken();
   if (navigator.vibrate) navigator.vibrate(18);
   initAudio();
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
@@ -3760,7 +3676,7 @@ function startDecohere() {
   // Violet colour temperature for Witness movement
   applyDecoherePalette();
   fadeDrone(true, 1.5); spParticles = [];
-  activityTimeout(witnessToken, () => {
+  setTimeout(() => {
     initSpParticles(10);
     spParticles.forEach(p => {
       p.targetAlpha = 0.18 + Math.random()*0.15;
@@ -3782,18 +3698,16 @@ function startDecohere() {
   const tapHint = document.getElementById('decTapHint');
   if (tapHint) tapHint.textContent = '';
   showScreen('s-witness', () => {
-    if (!isCurrentActivity(witnessToken)) return;
-    activityFrame(witnessToken, () => {
+    requestAnimationFrame(() => {
       arrLine.style.transition = 'opacity 1.0s ease';
       arrSub.style.transition  = 'opacity 1.0s ease';
-      activityTimeout(witnessToken, () => { arrLine.style.opacity = '1'; }, 80);
-      activityTimeout(witnessToken, () => { arrSub.style.opacity  = '1'; }, 320);
+      setTimeout(() => { arrLine.style.opacity = '1'; }, 80);
+      setTimeout(() => { arrSub.style.opacity  = '1'; }, 320);
     });
   });
 }
 
 function buildShadowGrid() {
-  const token = activityToken;
   const grid = document.getElementById('shadowGrid');
   grid.innerHTML = '';
   grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
@@ -3804,7 +3718,7 @@ function buildShadowGrid() {
 
   grid.style.opacity = '0';
   grid.style.transition = 'opacity 1.2s ease';
-  activityTimeout(token, () => { grid.style.opacity = '1'; }, 600);
+  setTimeout(() => { grid.style.opacity = '1'; }, 600);
 
   en.forEach((name, i) => {
     const displayName = lang === 'en' ? name : es[i];
@@ -3820,7 +3734,7 @@ function buildShadowGrid() {
     o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
     o.textContent = displayName;
 
-    activityTimeout(token, () => { o.style.opacity = '1'; }, 80 * i + 200);
+    setTimeout(() => { o.style.opacity = '1'; }, 80 * i + 200);
 
     const go = () => {
       if (audioCtx) playTap();
@@ -3834,7 +3748,7 @@ function buildShadowGrid() {
           el.style.background = 'rgba(201,169,110,.10)';
         }
       });
-      activityTimeout(token, () => showDecBodyMap(), 700);
+      setTimeout(() => showDecBodyMap(), 700);
     };
     o.addEventListener('click', go);
     o.addEventListener('touchend', e => { e.preventDefault(); go(); });
@@ -3848,7 +3762,6 @@ function buildShadowGrid() {
 // payload: shadow state name (witness) | state object (collapse)
 // ══════════════════════════════════════
 function showBodyMap(mode, payload) {
-  const token = activityToken;
   // For witness: replace shadow grid in s-decohere
   // For collapse: show s-bodymap screen
   const isDecohere = mode === 'witness';
@@ -3930,13 +3843,13 @@ function showBodyMap(mode, payload) {
     if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; }
     // Fade witness screen out, then inject body map
     if (scr) { scr.style.transition = 'opacity 0.5s ease'; scr.style.opacity = '0'; }
-    activityTimeout(token, () => {
+    setTimeout(() => {
       grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 1.0s ease;"></div>';
       wrap = document.getElementById('bodymapWrap');
       if (scr) { scr.style.opacity = '1'; scr.style.transition = 'none'; }
       const mainCv = document.getElementById('cv');
       if (mainCv) mainCv.style.opacity = '0';
-      activityTimeout(token, () => { if (wrap) wrap.style.opacity = '1'; }, 60);
+      setTimeout(() => { if (wrap) wrap.style.opacity = '1'; }, 60);
       buildDecohere();
     }, 520);
   } else {
@@ -4360,7 +4273,6 @@ function showBodyMap(mode, payload) {
 }
 
 function showDecBodyMap() {
-  nextActivityToken();
   // Legacy wrapper — routes to shared showBodyMap
   showBodyMap('witness', null);
 }
@@ -4482,14 +4394,14 @@ function showTonePicker(container, onSelect) {
 function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComplete) {
   // Destroy the fixed body map wrap so it never bleeds through
   const bmw = document.getElementById('bodymapWrap');
-  if (bmw) { bmw.style.opacity = '0'; activityTimeout(activityToken, () => { if (bmw.parentNode) bmw.parentNode.removeChild(bmw); }, 400); }
+  if (bmw) { bmw.style.opacity = '0'; setTimeout(() => { if (bmw.parentNode) bmw.parentNode.removeChild(bmw); }, 400); }
   const decTapHint = document.getElementById('decTapHint');
   if (decTapHint) decTapHint.textContent = '';
   const hasSpeech = ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
   const apiKey = lsGet('field_api_key');
 
   // If no speech API and no API key, skip entirely
-  if (!hasSpeech && !apiKey) { activityTimeout(activityToken, onComplete, 0); return; }
+  if (!hasSpeech && !apiKey) { setTimeout(onComplete, 0); return; }
 
   const t = lang === 'en';
   const zoneLabels = {
@@ -5172,7 +5084,6 @@ async function chamberCallAI(onDone) {
 }
 
 function startDissolutionChamber() {
-  nextActivityToken();
   chamberExchanges = 0;
   chamberHistory   = [];
   chamberTyping    = false;
@@ -5390,7 +5301,6 @@ function chamberToggleMic() {
 // ══════════════════════════════════════
 // PHASE 1: Acknowledgment — word fades in alone in silence, then breath begins
 function startDecAcknowledge() {
-  nextActivityToken();
   const displayName = lang==='en' ? decStateName : decStateNameES;
   // Hard-remove body map wrap — must never bleed through
   const _bmw = document.getElementById('bodymapWrap');
@@ -5445,7 +5355,6 @@ function startDecAcknowledge() {
 
       // Single 'breathe' prompt — appears at 4s, tap to begin
       let readyEl = document.createElement('div');
-      readyEl.id = 'decReadyEl';
       readyEl.style.cssText = `position:fixed;bottom:clamp(70px,14vh,110px);left:50%;
         transform:translateX(-50%);font-size:clamp(13px,3.2vw,16px);letter-spacing:.28em;
         color:rgba(240,230,208,.32);font-weight:300;font-family:'Plus Jakarta Sans',sans-serif;
@@ -5456,26 +5365,24 @@ function startDecAcknowledge() {
       setTimeout(() => { readyEl.style.opacity = '1'; }, 4000);
 
       let breathStarted = false;
-      const ackToken = activityToken;
       const beginBreath = () => {
-        if (breathStarted || !isCurrentActivity(ackToken)) return;
+        if (breathStarted) return;
         breathStarted = true;
         readyEl.style.transition = 'opacity 1.2s ease';
         readyEl.style.opacity = '0';
-        activityTimeout(ackToken, () => { if (readyEl.parentNode) readyEl.remove(); }, 1200);
+        setTimeout(() => { if (readyEl.parentNode) readyEl.remove(); }, 1200);
         startDecBreath(displayName);
       };
 
       readyEl.addEventListener('click', beginBreath);
       readyEl.addEventListener('touchend', e => { e.preventDefault(); beginBreath(); });
       // Auto-start at 9s
-      activityTimeout(ackToken, beginBreath, 9000);
+      setTimeout(beginBreath, 9000);
     }));
   });
 }
 
 function startDecBreath(displayName) {
-  nextActivityToken();
   bgDimTarget = 0.25;
   const t = TRANSLATIONS[lang];
   const ackLayer    = document.getElementById('dec-ack-layer');
@@ -5684,7 +5591,6 @@ function startDecBreath(displayName) {
 
 function showDecEnd() {
   currentMode = 'witness-end';
-  nextActivityToken();
   const t = TRANSLATIONS[lang];
   const nd = parseInt(lsGet('field_obs_witness')||'0') + 1;
   lsSet('field_obs_witness', nd);
@@ -5749,7 +5655,6 @@ const WLC_TOTAL = 4;
 let landingRaf = null;
 
 function startLandingScreen() {
-  nextActivityToken();
   document.getElementById('s-home').classList.remove('active');
   document.getElementById('s-landing').classList.add('active');
 
@@ -6033,7 +5938,6 @@ function advanceWelcome() {
 }
 
 function enterFromWelcome() {
-  nextActivityToken();
   lsSet('field_welcomed', '1');
   showScreen('s-home', () => { initSpParticles(12); tryDrone(); });
 }
