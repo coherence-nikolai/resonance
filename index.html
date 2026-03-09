@@ -974,7 +974,7 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
   <div class="obs-count-home" id="homeCount"></div>
   <div id="companion-wrap" style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:320px;padding:0 24px;margin-top:4px;"></div>
   <button id="revisitHomeBtn" onclick="revisitIntro()">revisit introduction</button>
-  <div id="guided-hint" aria-hidden="true"></div>
+  <div id="guided-hint" onclick="revisitIntro()"></div>
   <div class="home-lang-toggle" aria-label="Language toggle">
     <button class="home-lang-seg" id="homeLangEn" onclick="setLang('en')">EN</button>
     <button class="home-lang-seg" id="homeLangEs" onclick="setLang('es')">ES</button>
