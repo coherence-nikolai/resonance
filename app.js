@@ -5547,14 +5547,15 @@ function startDecBreath(displayName) {
             requestAnimationFrame(() => { bridge.style.opacity = '1'; });
             // Remove when dec-end screen takes over
             setTimeout(() => {
-              bridge.style.transition = 'opacity 0.8s ease';
+              bridge.style.transition = 'opacity 1.2s ease';
               bridge.style.opacity = '0';
-              setTimeout(() => bridge.remove(), 800);
-            }, 1800);
+              setTimeout(() => bridge.remove(), 1200);
+            }, 2600);
           };
         }
       }, 800);
-      dDelay(() => showDecEnd(), 4200);
+      // Give the witnessed state a little longer to settle before the end screen arrives.
+      dDelay(() => showDecEnd(), 5200);
       return;
     }
     cycle++;
@@ -5615,15 +5616,16 @@ function showDecEnd() {
   spParticles = Array.from({length:12}, (_,i) => new SpParticle(i,12));
   spParticles.forEach(p => {
     p._flickering = false; // [TECH2]
-    p.x = innerWidth/2 + (Math.random()-0.5)*20;
-    p.y = innerHeight/2 + (Math.random()-0.5)*20;
+    p.x = innerWidth/2 + (Math.random()-0.5)*14;
+    p.y = innerHeight/2 + (Math.random()-0.5)*14;
     p.targetAlpha = 0;
     p.targetClarity = 0;
-    p.phV *= 0.5;
+    p.phV *= 0.22;
+    p.driftR *= 0.45;
   });
   setTimeout(() => {
-    spParticles.forEach(p => { p.targetAlpha = 0.22 + Math.random()*0.2; });
-  }, 600);
+    spParticles.forEach(p => { p.targetAlpha = 0.12 + Math.random()*0.08; });
+  }, 900);
 
   // decEndLine intentionally left empty — WITNESSED sentence is the complete close
   document.getElementById('decEndLine').textContent = '';
@@ -5635,10 +5637,11 @@ function showDecEnd() {
     const sentence = (WITNESSED[lang] && WITNESSED[lang][decStateName]) || '';
     witnessed.textContent = sentence;
     witnessed.style.opacity = '0';
+    witnessed.style.transition = 'opacity 1.8s ease';
   }
 
   const btns = document.querySelector('.dec-btns');
-  if (btns) { btns.style.opacity='0'; btns.style.transition='opacity 1.4s ease'; btns.style.pointerEvents='none'; }
+  if (btns) { btns.style.opacity='0'; btns.style.transition='opacity 1.6s ease'; btns.style.pointerEvents='none'; }
 
   const backBtn = document.getElementById('backBtn');
   if (backBtn) { backBtn.onclick = () => goHome(); }
@@ -5648,9 +5651,10 @@ function showDecEnd() {
     const endLine = document.getElementById('decEndLine');
     if (endLine) endLine.classList.add('breathing-glow');
 
-    setTimeout(() => { if (witnessed) witnessed.style.opacity = '1'; }, 1500);
-    // [AE4] Witnessed sentence breathes for longer — buttons at 12s (was 8s)
-    setTimeout(() => { if (btns) { btns.style.opacity='1'; btns.style.pointerEvents='all'; } }, 12000);
+    // Let the close arrive in quiet first, then bring in the witnessed sentence.
+    setTimeout(() => { if (witnessed) witnessed.style.opacity = '1'; }, 2200);
+    // Buttons still wait for a real contemplative pause, but no longer trap the user.
+    setTimeout(() => { if (btns) { btns.style.opacity='1'; btns.style.pointerEvents='all'; } }, 7800);
   });
 }
 
