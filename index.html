@@ -669,8 +669,8 @@ html,body { margin:0;padding:0;width:100%;height:100%;background:var(--bg);
 
 #ghosts{position:fixed;inset:0;pointer-events:none;z-index:5;opacity:0;transition:opacity 1.4s ease;}
 .gst{position:absolute;font-size:var(--fl);letter-spacing:.12em;
-  color:rgba(201,169,110,.10);animation:gd 9s ease-in-out infinite;font-weight:300;}
-@keyframes gd{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  color:rgba(201,169,110,.09);opacity:.92;font-weight:300;transition:opacity 1.6s ease;}
+@keyframes gd{0%,100%{opacity:.9}50%{opacity:.72}}
 
 /* WELCOME */
 #s-landing{cursor:pointer;-webkit-tap-highlight-color:transparent;overflow:hidden;}
@@ -845,6 +845,36 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
 #s-bodymap{gap:12px;padding-top:72px;}
 
 
+
+/* v6 viewport and text-stability pass */
+html{height:-webkit-fill-available;}
+body{min-height:100svh;min-height:-webkit-fill-available;text-rendering:optimizeLegibility;}
+.screen{min-height:100svh;}
+@supports (height: 100svh){
+  .screen{min-height:100svh;}
+}
+
+/* Keep text motion subtle and non-positional */
+.field-title,.field-sub,.mv-label,.mv-hint,.obs-count-home,#homeLangBtn,#guided-hint,.wlc-big,.wlc-small,.wlc-mv-label,.wlc-mv-hint,.dec-end-line,.dec-witnessed,.obs-note,.closing,.return-btn{
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  transform:translateZ(0);
+}
+
+/* Welcome cards can crowd on short screens */
+.wlc-card{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:max(72px, calc(env(safe-area-inset-bottom,0px) + 72px));}
+.wlc-movements{flex-wrap:wrap;row-gap:14px;}
+@media (max-height: 740px), (max-width: 390px){
+  .wlc-card{gap:18px;padding:clamp(28px,8vw,40px) clamp(20px,6vw,32px) max(84px, calc(env(safe-area-inset-bottom,0px) + 84px));justify-content:flex-start;}
+  .wlc-big{line-height:1.42;max-width:300px;}
+  .wlc-small{line-height:1.55;max-width:260px;}
+  .wlc-movements{gap:18px 22px;}
+  .wlc-tap-hint,.wlc-dots{position:fixed;}
+}
+
+/* Summary / session text collision prevention */
+#s-end,#s-dec-end,#s-storm{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+#storm-note-log,.wlc-dots,#tapNext{max-width:calc(100vw - 32px);text-align:center;}
+
 /* v5 responsive stability overrides */
 html,body{min-height:100dvh;}
 body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
@@ -924,7 +954,9 @@ body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset
 }
 
 @media (prefers-reduced-motion: reduce){
-  .gst{animation:none;}
+  .gst,.field-title,.dec-end-line.breathing-glow,.wlc-tap-hint,#tapNext,.movement.just-released .mv-glyph{animation:none !important;}
+  .movement:hover .mv-glyph,.movement.lit .mv-glyph{transform:none;}
+  .al,.wlc-card,.screen,.landing-tap-hint{transition-duration:.01ms !important;}
 }
 
 </style>
