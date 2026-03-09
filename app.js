@@ -3874,20 +3874,33 @@ function showBodyMap(mode, payload) {
   // Build DOM into the right container
   let container, wrap;
   if (isDecohere) {
-    const grid = document.getElementById('shadowGrid');
     const line = document.getElementById('decArrivalLine');
     const sub  = document.getElementById('decArrivalSub');
-    if (line) { line.style.transition = 'opacity 0.4s ease'; line.style.opacity = '0'; }
-    if (sub)  { sub.style.transition  = 'opacity 0.4s ease'; sub.style.opacity  = '0'; }
-    const scr = document.getElementById('s-witness');
-    if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; scr.style.opacity = '1'; scr.style.transition = 'none'; }
-    // Do not fade the witness screen or its parent container to zero here.
-    // Replace only the shadow-grid contents with the body-map layer so the handoff stays visible.
-    grid.style.opacity = '1';
-    grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 0.7s ease;"></div>';
-    wrap = document.getElementById('bodymapWrap');
+    const hint = document.getElementById('decTapHint');
+    if (line) { line.style.transition = 'opacity 0.32s ease'; line.style.opacity = '0'; }
+    if (sub)  { sub.style.transition  = 'opacity 0.32s ease'; sub.style.opacity  = '0'; }
+    if (hint) { hint.style.transition = 'opacity 0.24s ease'; hint.style.opacity = '0'; }
+
+    // Use the dedicated body-map screen for witness as well.
+    // This avoids injecting a fixed full-screen layer inside the shadow-grid,
+    // which has been causing a blank-screen handoff on some runs.
+    const screen = document.getElementById('s-bodymap');
+    screen.innerHTML = '';
+    const bwrap = document.createElement('div');
+    bwrap.className = 'bodymap-wrap';
+    bwrap.id = 'bodymapWrap';
+    screen.appendChild(bwrap);
+    wrap = bwrap;
+
     const mainCv = document.getElementById('cv');
-    if (mainCv) mainCv.style.opacity = '0';
+    if (mainCv) {
+      mainCv.style.transition = 'opacity 0.45s ease';
+      mainCv.style.opacity = '0';
+    }
+
+    // Keep witness mode semantics for logic/animation, but show the body map
+    // in the dedicated screen so the transition is robust and visible.
+    showScreen('s-bodymap');
     requestAnimationFrame(() => {
       requestAnimationFrame(() => { if (wrap) wrap.style.opacity = '1'; });
     });
