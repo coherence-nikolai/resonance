@@ -1,3 +1,24 @@
+
+// ---- Coherence transition guard (added v3.2) ----
+function transition(fn){
+  if(isTransitioning) return;
+  isTransitioning = true;
+  try { fn(); }
+  finally {
+    setTimeout(()=>{ isTransitioning=false; },420);
+  }
+}
+
+// ---- Visibility RAF/audio stabiliser ----
+let __fieldVisible = true;
+document.addEventListener('visibilitychange', ()=>{
+  __fieldVisible = !document.hidden;
+  if(audioCtx){
+    if(document.hidden && audioCtx.state === 'running') audioCtx.suspend();
+    if(!document.hidden && audioCtx.state === 'suspended') audioCtx.resume();
+  }
+});
+
 // ═══════════════════════════════════════
 // FIELD — Unified App v3.1
 // Observe · Collapse · Witness
@@ -212,6 +233,7 @@ class BreathOrb {
     this.flickPh = 0;
     this.onPhaseChange = null;
     this.wordText = '';
+    this.wordColorPhase = 0; // 0=red-amber, 1=rose, 2=violet-cream, 3=luminous white
     this.wordAlpha = 0;
     this.wordTargetAlpha = 0;
     this.wordScale = 1;
@@ -451,16 +473,30 @@ class BreathOrb {
       const glowRadius = 10 + gi * 35;
       const glowAlpha = 0.25 + gi * 0.75;
 
-      // Witness: carry the shadow-red hue into the orb
+      // Witness colour arc across cycles — red-amber → rose → violet-cream → luminous white
       // Collapse: warm gold
       let wordColor;
       if (isViolet) {
-        // Red-to-amber gradient based on glow intensity
-        const r = Math.round(230 + gi * 10);
-        const g2 = Math.round(140 + gi * 40);
-        const b = Math.round(120 + gi * 20);
+        const phase = this.wordColorPhase || 0;
+        let r, g2, b;
+        if (phase === 0) {
+          // deep red-amber — saturated from the start
+          r = Math.round(215 + gi * 8); g2 = Math.round(72 + gi * 38); b = Math.round(52 + gi * 18);
+          cx.shadowColor = `rgba(200,60,40,${(wordA * glowAlpha * 1.1).toFixed(2)})`;
+        } else if (phase === 1) {
+          // rose
+          r = Math.round(210 + gi * 10); g2 = Math.round(130 + gi * 40); b = Math.round(110 + gi * 30);
+          cx.shadowColor = `rgba(200,110,100,${(wordA * glowAlpha).toFixed(2)})`;
+        } else if (phase === 2) {
+          // violet-cream
+          r = Math.round(200 + gi * 10); g2 = Math.round(180 + gi * 20); b = Math.round(215 + gi * 20);
+          cx.shadowColor = `rgba(190,160,220,${(wordA * glowAlpha).toFixed(2)})`;
+        } else {
+          // luminous cream-white (morph)
+          r = Math.round(245); g2 = Math.round(238); b = Math.round(230);
+          cx.shadowColor = `rgba(245,235,215,${(wordA * glowAlpha * 1.2).toFixed(2)})`;
+        }
         wordColor = `rgba(${r},${g2},${b},${wordA.toFixed(3)})`;
-        cx.shadowColor = `rgba(220,100,80,${(wordA * glowAlpha).toFixed(2)})`;
       } else {
         const bright = Math.round(200 + gi * 55);
         wordColor = `rgba(${bright + 15},${bright},${Math.max(0,bright - 50)},${wordA.toFixed(3)})`;
@@ -1246,14 +1282,14 @@ function showScreen(id, postCb) {
   };
 
   if (current) {
-    current.style.transition = 'opacity 0.65s ease';
+    current.style.transition = 'opacity 0.55s ease';
     current.style.opacity = '0';
     setTimeout(() => {
       current.classList.remove('active');
       current.style.opacity = '';
       current.style.transition = '';
-      setTimeout(showNext, 40);
-    }, 660);
+      showNext();
+    }, 560);
   } else {
     showNext();
   }
@@ -1431,6 +1467,22 @@ function goHome() {
   const cameFromDecohere = currentMode === 'witness-end' || currentMode === 'witness';
   currentMode = 'home';
   clearAllBreath(); clearObserver(); clearAllDec();
+  stopStillDrone(1.0);
+
+  // ── Still screen cleanup — prevent bleed-through on transition ──
+  const stillCanvas = document.getElementById('still-canvas');
+  if (stillCanvas) { stillCanvas.style.opacity = '0'; setTimeout(() => stillCanvas.remove(), 800); }
+  const stillWhisper = document.getElementById('still-whisper');
+  if (stillWhisper) { stillWhisper.style.transition = 'none'; stillWhisper.style.opacity = '0'; }
+  const stillAIResp = document.getElementById('still-ai-response');
+  if (stillAIResp) { stillAIResp.style.transition = 'none'; stillAIResp.style.opacity = '0'; }
+  const stillThreadWrap = document.getElementById('still-thread-wrap');
+  if (stillThreadWrap) { stillThreadWrap.style.transition = 'none'; stillThreadWrap.style.opacity = '0'; stillThreadWrap.style.pointerEvents = 'none'; }
+  const stillTxt = document.getElementById('stillTxt');
+  if (stillTxt) { stillTxt.style.transition = 'none'; stillTxt.style.opacity = '0'; }
+  const stillOrbZone = document.getElementById('still-orb-zone');
+  if (stillOrbZone) { stillOrbZone.style.transition = 'none'; stillOrbZone.style.opacity = '0'; }
+
   clearGhosts();
   // Clear witness/decohere state
   const grid = document.getElementById('shadowGrid');
@@ -1457,6 +1509,16 @@ function goHome() {
   if (stormAutoExitTimer) { clearTimeout(stormAutoExitTimer); stormAutoExitTimer = null; }
 
   showScreen('s-home', () => {
+    // Reset still screen for next entry
+    const stillWhisper = document.getElementById('still-whisper');
+    if (stillWhisper) { stillWhisper.style.opacity = '0'; }
+    const stillTxt = document.getElementById('stillTxt');
+    if (stillTxt) { stillTxt.style.opacity = ''; }
+    const stillOrbZone = document.getElementById('still-orb-zone');
+    if (stillOrbZone) { stillOrbZone.innerHTML = ''; stillOrbZone.style.opacity = ''; }
+    const stillThreadWrap = document.getElementById('still-thread-wrap');
+    if (stillThreadWrap) { stillThreadWrap.style.opacity = '0'; stillThreadWrap.style.pointerEvents = 'none'; }
+
     document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
     if (cameFromDecohere) {
       setTimeout(() => {
@@ -2703,8 +2765,6 @@ function initScene(scene, chosen) {
 function buildCollapseField() {
   const t = TRANSLATIONS[lang];
   document.getElementById('fline').textContent = t.fieldLine;
-  document.getElementById('stillTxt').innerHTML = t.stillTxt.replace(/\n/g,'<br>');
-  document.getElementById('stillBack').textContent = t.retBtn;
   document.getElementById('obsCt').textContent = totalObs > 0 ? t.obsCount(totalObs) : '';
   document.getElementById('revisitBtn').textContent = 'revisit introduction';
   const grid = document.getElementById('grid'); grid.innerHTML = '';
@@ -3055,156 +3115,167 @@ function enterStill() {
   showBackBtn();
   document.getElementById('backBtn').onclick = () => goHome();
 
-  // Particle field — very slow, almost motionless
-  spParticles.forEach(p => { p.targetAlpha = 0.15 + Math.random()*0.1; });
+  spParticles.forEach(p => { p.targetAlpha = 0.12 + Math.random()*0.08; });
 
   document.getElementById('stillTxt').innerHTML = t.stillTxt.replace(/\n/g,'<br>');
   const stillBackEl = document.getElementById('stillBack');
   stillBackEl.textContent = t.retBtn;
-  stillBackEl.style.opacity = '0.28'; // dim until AI responds, but always tappable
+  stillBackEl.style.opacity = '0';
   stillBackEl.onclick = () => {
     saveThreadLine();
-    goHome();
+    // Collapse all still content instantly before screen transition
+    const textZone = document.getElementById('still-text-zone');
+    if (textZone) { textZone.style.transition = 'opacity 0.3s ease'; textZone.style.opacity = '0'; }
+    const orbZone = document.getElementById('still-orb-zone');
+    if (orbZone) { orbZone.style.transition = 'opacity 0.3s ease'; orbZone.style.opacity = '0'; }
+    setTimeout(() => goHome(), 300);
   };
 
-  // Still entry tone — single quiet fade: 432Hz barely audible
-  if (audioCtx) {
-    try {
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = 'sine'; o.frequency.value = 432;
-      g.gain.setValueAtTime(0, audioCtx.currentTime);
-      g.gain.linearRampToValueAtTime(0.018, audioCtx.currentTime + 2.5);
-      g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 9);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(); o.stop(audioCtx.currentTime + 9.5);
-    } catch(e) {}
-  }
-
   showScreen('s-still', () => {
-    // ── Still canvas — crystallised kasina, slow breath, already arrived ──
-    const stillP = document.querySelector('#s-still .still-p');
-    if (stillP) {
-      stillP.style.opacity = '0'; // canvas replaces the gold dot
-      const sc = document.createElement('canvas');
-      sc.id = 'still-canvas';
-      sc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0;transition:opacity 2s ease;';
-      sc.width = innerWidth; sc.height = innerHeight;
-      document.getElementById('s-still').insertBefore(sc, document.getElementById('s-still').firstChild);
-      setTimeout(() => { sc.style.opacity = '1'; }, 400);
+    const orbZone = document.getElementById('still-orb-zone');
+    const sc = document.createElement('canvas');
+    sc.id = 'still-canvas';
+    sc.width = orbZone.offsetWidth || innerWidth;
+    sc.height = orbZone.offsetHeight || Math.round(innerHeight * 0.44);
+    sc.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 2.5s ease;';
+    orbZone.appendChild(sc);
+    setTimeout(() => { sc.style.opacity = '1'; }, 300);
 
-      const sx = sc.getContext('2d');
-      let stillRaf = null;
-      let stillPh = 0;
-      let stillBreathPh = 0;
+    const sx = sc.getContext('2d');
+    let stillPh = 0, stillBreathPh = 0;
 
-      const drawStill = () => {
-        if (currentMode !== 'still') { cancelAnimationFrame(stillRaf); sc.remove(); return; }
-        stillRaf = requestAnimationFrame(drawStill);
-        sx.clearRect(0, 0, sc.width, sc.height);
+    const drawStill = () => {
+      if (currentMode !== 'still') { sc.remove(); return; }
+      requestAnimationFrame(drawStill);
+      sx.clearRect(0, 0, sc.width, sc.height);
+      stillPh += 0.005; stillBreathPh += 0.007;
+      const cx2 = sc.width * 0.5, cy2 = sc.height * 0.5;
+      const breathScale = 1 + 0.1 * Math.sin(stillBreathPh);
+      const baseR = Math.min(sc.width, sc.height) * 0.22 * breathScale;
+      const NUM_RAYS = 8;
 
-        stillPh   += 0.006;   // slow spin
-        stillBreathPh += 0.008; // very slow breath
+      const grad = sx.createRadialGradient(cx2, cy2, 0, cx2, cy2, baseR * 3.2);
+      grad.addColorStop(0, `rgba(210,185,235,${(0.20*breathScale).toFixed(3)})`);
+      grad.addColorStop(0.5, 'rgba(180,150,220,0.05)');
+      grad.addColorStop(1, 'rgba(180,150,220,0)');
+      sx.fillStyle = grad;
+      sx.beginPath(); sx.arc(cx2, cy2, baseR*3.2, 0, Math.PI*2); sx.fill();
 
-        const cx2 = sc.width * 0.5;
-        const cy2 = sc.height * 0.38;
-        const breathScale = 1 + 0.12 * Math.sin(stillBreathPh);
-        const baseR = Math.min(sc.width, sc.height) * 0.11 * breathScale;
-        const NUM_RAYS = 8;
-
-        // Outer glow — violet/gold crystallised
-        const grad = sx.createRadialGradient(cx2, cy2, 0, cx2, cy2, baseR * 3.5);
-        grad.addColorStop(0, `rgba(210,185,235,${(0.22 * breathScale).toFixed(3)})`);
-        grad.addColorStop(0.5, `rgba(180,150,220,0.06)`);
-        grad.addColorStop(1, 'rgba(180,150,220,0)');
-        sx.fillStyle = grad;
-        sx.beginPath(); sx.arc(cx2, cy2, baseR * 3.5, 0, Math.PI * 2); sx.fill();
-
-        // Rays — crystallised star
-        sx.save();
-        sx.translate(cx2, cy2);
-        sx.rotate(stillPh);
-        for (let i = 0; i < NUM_RAYS; i++) {
-          const angle = (Math.PI * 2 / NUM_RAYS) * i;
-          const rayLen = baseR * (1.4 + 0.3 * Math.sin(stillPh * 2 + i));
-          const rayAlpha = 0.28 + 0.14 * Math.sin(stillBreathPh + i * 0.7);
-          sx.beginPath();
-          sx.strokeStyle = `rgba(210,185,235,${rayAlpha.toFixed(3)})`;
-          sx.lineWidth = 0.8;
-          sx.moveTo(Math.cos(angle) * baseR * 0.5, Math.sin(angle) * baseR * 0.5);
-          sx.lineTo(Math.cos(angle) * rayLen, Math.sin(angle) * rayLen);
-          sx.stroke();
-        }
-        sx.restore();
-
-        // Core orb
-        const coreGrad = sx.createRadialGradient(cx2, cy2, 0, cx2, cy2, baseR);
-        coreGrad.addColorStop(0, `rgba(240,225,255,${(0.72 * breathScale).toFixed(3)})`);
-        coreGrad.addColorStop(0.4, `rgba(210,185,235,${(0.45 * breathScale).toFixed(3)})`);
-        coreGrad.addColorStop(1, 'rgba(180,150,220,0)');
-        sx.fillStyle = coreGrad;
-        sx.beginPath(); sx.arc(cx2, cy2, baseR, 0, Math.PI * 2); sx.fill();
-
-        // Dot at centre
+      sx.save(); sx.translate(cx2, cy2); sx.rotate(stillPh);
+      for (let i = 0; i < NUM_RAYS; i++) {
+        const angle = (Math.PI*2/NUM_RAYS)*i;
+        const rayLen = baseR*(1.5 + 0.25*Math.sin(stillPh*2 + i));
+        const rayAlpha = 0.22 + 0.12*Math.sin(stillBreathPh + i*0.7);
         sx.beginPath();
-        sx.fillStyle = `rgba(245,235,255,${(0.88 * breathScale).toFixed(3)})`;
-        sx.arc(cx2, cy2, 2.8, 0, Math.PI * 2); sx.fill();
-      };
-      drawStill();
+        sx.strokeStyle = `rgba(210,185,235,${rayAlpha.toFixed(3)})`;
+        sx.lineWidth = 0.8;
+        sx.moveTo(Math.cos(angle)*baseR*0.5, Math.sin(angle)*baseR*0.5);
+        sx.lineTo(Math.cos(angle)*rayLen, Math.sin(angle)*rayLen);
+        sx.stroke();
+      }
+      sx.restore();
+
+      const coreGrad = sx.createRadialGradient(cx2, cy2, 0, cx2, cy2, baseR);
+      coreGrad.addColorStop(0, `rgba(245,235,255,${(0.75*breathScale).toFixed(3)})`);
+      coreGrad.addColorStop(0.4, `rgba(210,185,235,${(0.48*breathScale).toFixed(3)})`);
+      coreGrad.addColorStop(1, 'rgba(180,150,220,0)');
+      sx.fillStyle = coreGrad;
+      sx.beginPath(); sx.arc(cx2, cy2, baseR, 0, Math.PI*2); sx.fill();
+
+      sx.beginPath();
+      sx.fillStyle = `rgba(248,240,255,${(0.90*breathScale).toFixed(3)})`;
+      sx.arc(cx2, cy2, 3, 0, Math.PI*2); sx.fill();
+    };
+    drawStill();
+
+    // Continuous ambient drone — 432Hz + 436Hz binaural (4Hz delta beat)
+    if (audioCtx) {
+      try {
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.022, audioCtx.currentTime + 4);
+        gainNode.connect(audioCtx.destination);
+        window._stillDroneGain = gainNode;
+
+        const oL = audioCtx.createOscillator();
+        oL.type = 'sine'; oL.frequency.value = 432;
+        if (audioCtx.createStereoPanner) {
+          const pL = audioCtx.createStereoPanner(); pL.pan.value = -0.6;
+          oL.connect(pL); pL.connect(gainNode);
+        } else oL.connect(gainNode);
+        oL.start();
+
+        const oR = audioCtx.createOscillator();
+        oR.type = 'sine'; oR.frequency.value = 436;
+        if (audioCtx.createStereoPanner) {
+          const pR = audioCtx.createStereoPanner(); pR.pan.value = 0.6;
+          oR.connect(pR); pR.connect(gainNode);
+        } else oR.connect(gainNode);
+        oR.start();
+
+        // Very slow tremolo 0.05Hz — one pulse per 20s
+        const tremoloOsc = audioCtx.createOscillator();
+        tremoloOsc.type = 'sine'; tremoloOsc.frequency.value = 0.05;
+        const tremoloDepth = audioCtx.createGain();
+        tremoloDepth.gain.value = 0.006;
+        tremoloOsc.connect(tremoloDepth); tremoloDepth.connect(gainNode.gain);
+        tremoloOsc.start();
+
+        window._stillDroneNodes = [oL, oR, tremoloOsc];
+      } catch(e) {}
     }
-    // Whisper back the last thread line if one exists
+
+    // Whisper — past session statement
     const lastThread = lsGet('field_thread', '');
     const whisperEl = document.getElementById('still-whisper');
     if (whisperEl && lastThread) {
       const prefix = lang === 'es'
-        ? (t.stillWhisperPrefixES || 'dijiste la última vez:')
-        : (t.stillWhisperPrefix || 'you said last time:');
-      whisperEl.textContent = prefix + ' \u201c' + lastThread + '\u201d';
-      setTimeout(() => { whisperEl.style.opacity = '1'; }, 800);
+        ? (t.stillWhisperPrefixES || 'la última vez dijiste:')
+        : (t.stillWhisperPrefix   || 'last time you said:');
+      whisperEl.innerHTML = `<span style="font-size:.78em;letter-spacing:.15em;color:rgba(240,230,208,.58);text-transform:lowercase;">${prefix}</span><br>&#8220;${lastThread}&#8221;`;
+      setTimeout(() => { whisperEl.style.opacity = '1'; }, 1200);
     }
 
-    // Thread input — fades in after 4s
-    const threadWrap = document.getElementById('still-thread-wrap');
+    // Thread input — fades in after 5s
+    const threadWrap   = document.getElementById('still-thread-wrap');
     const threadPrompt = document.getElementById('still-thread-prompt');
-    const threadInput = document.getElementById('still-thread-input');
+    const threadInput  = document.getElementById('still-thread-input');
+
     if (threadWrap && threadPrompt && threadInput) {
       threadPrompt.textContent = lang === 'es'
         ? 'una cosa verdadera de esta sesión'
         : 'one true thing from this session';
-      threadInput.placeholder = lang === 'es' ? '...' : '...';
+
+      const stillResponseEl = document.createElement('div');
+      stillResponseEl.id = 'still-ai-response';
+      threadWrap.appendChild(stillResponseEl);
+
       setTimeout(() => {
         threadWrap.style.opacity = '1';
         threadWrap.style.pointerEvents = 'auto';
-      }, 4000);
-
-      // Still AI response element — appears below input after submit
-      const stillResponseEl = document.createElement('div');
-      stillResponseEl.style.cssText = `font-size:clamp(13px,3.2vw,16px);font-style:italic;
-        font-family:'Cormorant Garamond',Georgia,serif;letter-spacing:.05em;
-        color:rgba(201,169,110,.82);text-align:center;max-width:280px;
-        line-height:1.6;opacity:0;transition:opacity 0s;margin-top:4px;`;
-      threadWrap.appendChild(stillResponseEl);
+      }, 5000);
 
       const submitThread = () => {
         const val = threadInput.value.trim();
         if (!val) return;
         saveThreadLine();
-        // Fire AI affirmation
+        threadInput.style.opacity = '0.45';
+        threadInput.disabled = true;
         const apiKey = lsGet('field_api_key');
         if (apiKey) {
-          threadInput.style.opacity = '0.4';
-          threadInput.disabled = true;
           runStillAI(val, stillResponseEl);
-          // After AI response has time to land, fade home button in
+          setTimeout(() => {
+            const sb = document.getElementById('stillBack');
+            if (sb) { sb.style.transition = 'opacity 1.8s ease'; sb.style.opacity = '1'; }
+          }, 3500);
+        } else {
           setTimeout(() => {
             const sb = document.getElementById('stillBack');
             if (sb) { sb.style.transition = 'opacity 1.4s ease'; sb.style.opacity = '1'; }
-          }, 3500);
-        } else {
-          goHome();
+          }, 800);
         }
       };
 
-      // Save on enter
       threadInput.addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); submitThread(); }
       });
@@ -3212,9 +3283,29 @@ function enterStill() {
         if (threadInput.value.trim()) submitThread();
       });
     }
+
+    // Back button always reachable after 7s
+    setTimeout(() => {
+      const sb = document.getElementById('stillBack');
+      if (sb && parseFloat(sb.style.opacity||'0') < 0.5) {
+        sb.style.transition = 'opacity 2s ease';
+        sb.style.opacity = '0.72';
+      }
+    }, 7000);
   });
 }
 
+function stopStillDrone(fadeTime) {
+  const g = window._stillDroneGain;
+  if (!g || !audioCtx) return;
+  const ft = fadeTime || 1.2;
+  g.gain.setTargetAtTime(0, audioCtx.currentTime, ft * 0.3);
+  setTimeout(() => {
+    (window._stillDroneNodes || []).forEach(n => { try { n.stop(); } catch(e){} });
+    window._stillDroneNodes = null;
+    window._stillDroneGain  = null;
+  }, ft * 1000 + 200);
+}
 function saveThreadLine() {
   const threadInput = document.getElementById('still-thread-input');
   if (threadInput && threadInput.value.trim()) {
@@ -3629,18 +3720,21 @@ function showBodyMap(mode, payload) {
     const grid = document.getElementById('shadowGrid');
     const line = document.getElementById('decArrivalLine');
     const sub  = document.getElementById('decArrivalSub');
-    if (line) { line.style.transition = 'opacity 0.5s ease'; line.style.opacity = '0'; }
-    if (sub)  { sub.style.transition  = 'opacity 0.5s ease'; sub.style.opacity  = '0'; }
-    // Remove padding constraints — full screen figure
+    if (line) { line.style.transition = 'opacity 0.4s ease'; line.style.opacity = '0'; }
+    if (sub)  { sub.style.transition  = 'opacity 0.4s ease'; sub.style.opacity  = '0'; }
     const scr = document.getElementById('s-witness');
     if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; }
-    grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 1.2s ease;"></div>';
-    wrap = document.getElementById('bodymapWrap');
-    // Fade in after a beat
-    setTimeout(() => { wrap.style.opacity = '1'; }, 80);
-    // Hide main canvas during witness body map
-    const mainCv = document.getElementById('cv');
-    if (mainCv) mainCv.style.opacity = '0';
+    // Fade witness screen out, then inject body map
+    if (scr) { scr.style.transition = 'opacity 0.5s ease'; scr.style.opacity = '0'; }
+    setTimeout(() => {
+      grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 1.0s ease;"></div>';
+      wrap = document.getElementById('bodymapWrap');
+      if (scr) { scr.style.opacity = '1'; scr.style.transition = 'none'; }
+      const mainCv = document.getElementById('cv');
+      if (mainCv) mainCv.style.opacity = '0';
+      setTimeout(() => { if (wrap) wrap.style.opacity = '1'; }, 60);
+      buildDecohere();
+    }, 520);
   } else {
     // Collapse: use dedicated s-bodymap screen
     const screen = document.getElementById('s-bodymap');
@@ -3655,9 +3749,10 @@ function showBodyMap(mode, payload) {
     screen.appendChild(bwrap);
     wrap = bwrap;
     showScreen('s-bodymap');
+    buildDecohere();
   }
 
-  // ── Decohere: full-screen canvas figure ──
+  function buildDecohere() {
   if (isDecohere) {
     const W = innerWidth, H = innerHeight;
 
@@ -4057,6 +4152,7 @@ function showBodyMap(mode, payload) {
     wrap.appendChild(b);
     setTimeout(() => { b.style.opacity = '1'; b.style.transform = 'translateY(0)'; }, 120 * idx);
   });
+  } // end buildDecohere
 }
 
 function showDecBodyMap() {
@@ -4088,53 +4184,94 @@ Rules:
 function showTonePicker(container, onSelect) {
   const t = lang === 'en';
   const tones = t
-    ? [{ key:'pleasant', label:'pleasant', color:'rgba(140,200,160,', glow:'rgba(120,180,140,' },
-       { key:'unpleasant', label:'unpleasant', color:'rgba(200,140,140,', glow:'rgba(180,120,120,' },
-       { key:'neutral', label:'neutral', color:'rgba(200,185,210,', glow:'rgba(180,165,195,' }]
-    : [{ key:'pleasant', label:'agradable', color:'rgba(140,200,160,', glow:'rgba(120,180,140,' },
-       { key:'unpleasant', label:'desagradable', color:'rgba(200,140,140,', glow:'rgba(180,120,120,' },
-       { key:'neutral', label:'neutro', color:'rgba(200,185,210,', glow:'rgba(180,165,195,' }];
+    ? [{ key:'pleasant',   label:'pleasant',     freq:528, color:'rgba(140,200,160,' },
+       { key:'unpleasant', label:'unpleasant',   freq:174, color:'rgba(200,140,140,' },
+       { key:'neutral',    label:'neutral',       freq:396, color:'rgba(200,185,210,' }]
+    : [{ key:'pleasant',   label:'agradable',    freq:528, color:'rgba(140,200,160,' },
+       { key:'unpleasant', label:'desagradable', freq:174, color:'rgba(200,140,140,' },
+       { key:'neutral',    label:'neutro',        freq:396, color:'rgba(200,185,210,' }];
 
   const layer = document.createElement('div');
   layer.style.cssText = `position:fixed;inset:0;z-index:22;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:clamp(20px,6vh,36px);
-    background:rgba(14,12,10,0.82);opacity:0;transition:opacity .9s ease;padding:0 32px;`;
+    align-items:center;justify-content:center;gap:clamp(28px,8vh,52px);
+    background:rgba(14,12,10,0.92);opacity:0;transition:opacity 0.9s ease;`;
+  document.body.appendChild(layer);
 
+  // Label
   const label = document.createElement('div');
-  label.style.cssText = `font-size:clamp(13px,3.2vw,15px);letter-spacing:.18em;
-    color:rgba(240,230,208,.35);text-transform:uppercase;text-align:center;`;
+  label.style.cssText = `font-size:clamp(11px,2.8vw,13px);letter-spacing:.28em;
+    color:rgba(240,230,208,.62);text-transform:uppercase;text-align:center;
+    opacity:0;transition:opacity 1.2s ease;`;
   label.textContent = t ? 'its quality' : 'su cualidad';
+  layer.appendChild(label);
 
-  const btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;gap:clamp(10px,3vw,18px);';
+  // Words — stacked, large
+  const wordWrap = document.createElement('div');
+  wordWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:clamp(18px,5vh,36px);';
+  layer.appendChild(wordWrap);
 
-  tones.forEach(tone => {
-    const b = document.createElement('button');
-    b.style.cssText = `background:none;border:1px solid ${tone.color}0.28);border-radius:24px;
-      padding:clamp(8px,2vh,12px) clamp(14px,4vw,22px);cursor:pointer;font-family:inherit;
-      font-size:clamp(12px,3vw,15px);letter-spacing:.10em;color:${tone.color}0.65);
-      -webkit-tap-highlight-color:transparent;
-      transition:all .25s ease;`;
-    b.textContent = tone.label;
+  let selected = false;
+
+  tones.forEach((tone, idx) => {
+    const w = document.createElement('button');
+    w.style.cssText = `background:none;border:none;cursor:pointer;font-family:'Cormorant Garamond',Georgia,serif;
+      font-size:clamp(42px,12vw,64px);font-weight:300;letter-spacing:.06em;
+      color:${tone.color}0.72);opacity:0;
+      transition:opacity 1.0s ease, color 0.3s ease, text-shadow 0.4s ease;
+      -webkit-tap-highlight-color:transparent;padding:8px 24px;line-height:1.1;`;
+    w.textContent = tone.label;
+
+    // Stagger fade-in
+    setTimeout(() => {
+      w.style.opacity = '1';
+    }, 300 + idx * 280);
 
     const select = () => {
-      b.style.borderColor = `${tone.color}0.75)`;
-      b.style.color = `${tone.color}0.95)`;
-      b.style.boxShadow = `0 0 18px ${tone.glow}0.3)`;
-      if (navigator.vibrate) navigator.vibrate(12);
+      if (selected) return;
+      selected = true;
+      if (navigator.vibrate) navigator.vibrate(14);
+
+      // Play tone
+      if (audioCtx) {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = tone.freq;
+        g.gain.setValueAtTime(0, audioCtx.currentTime);
+        g.gain.linearRampToValueAtTime(0.055, audioCtx.currentTime + 0.12);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 2.2);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + 2.5);
+      }
+
+      // Chosen word glows, others dissolve
+      wordWrap.querySelectorAll('button').forEach(el => {
+        if (el === w) {
+          el.style.color = `${tone.color}1)`;
+          el.style.textShadow = `0 0 40px ${tone.color}0.5), 0 0 80px ${tone.color}0.2)`;
+          el.style.transition = 'color 0.4s ease, text-shadow 0.4s ease';
+        } else {
+          el.style.transition = 'opacity 0.5s ease';
+          el.style.opacity = '0';
+        }
+      });
+      label.style.opacity = '0';
+
+      // Hold chosen word for 1.8s — let it land
       setTimeout(() => {
+        layer.style.transition = 'opacity 0.7s ease';
         layer.style.opacity = '0';
         setTimeout(() => { layer.remove(); onSelect(tone.key); }, 700);
-      }, 280);
+      }, 1800);
     };
-    b.onclick = select;
-    btnRow.appendChild(b);
+
+    w.onclick = select;
+    w.addEventListener('touchend', e => { e.preventDefault(); select(); });
+    wordWrap.appendChild(w);
   });
 
-  layer.appendChild(label);
-  layer.appendChild(btnRow);
-  container.appendChild(layer);
-  requestAnimationFrame(() => { requestAnimationFrame(() => { layer.style.opacity = '1'; }); });
+  requestAnimationFrame(() => {
+    layer.style.opacity = '1';
+    setTimeout(() => { label.style.opacity = '1'; }, 200);
+  });
 }
 
 function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComplete) {
@@ -4160,29 +4297,29 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
   const layer = document.createElement('div');
   layer.id = 'voice-sense-layer';
   layer.style.cssText = `position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:clamp(18px,5vh,32px);
+    align-items:center;justify-content:center;gap:clamp(24px,7vh,44px);
     background:rgba(14,12,10,0);transition:background 1.2s ease;padding:0 clamp(24px,8vw,52px);`;
   document.body.appendChild(layer);
 
   // Prompt text
   const prompt = document.createElement('div');
-  prompt.style.cssText = `font-size:clamp(32px,9vw,48px);font-weight:300;letter-spacing:.05em;
+  prompt.style.cssText = `font-size:clamp(42px,12vw,58px);font-weight:300;letter-spacing:.05em;
     color:rgba(240,230,208,.95);font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
-    text-align:center;line-height:1.4;opacity:0;transition:opacity 1.4s ease;max-width:320px;`;
+    text-align:center;line-height:1.3;opacity:0;transition:opacity 1.4s ease;max-width:340px;`;
   const locationLine = t ? `in your ${zoneLabel}` : `en tu ${zoneLabel}`;
   prompt.innerHTML = `${shadowWord}<br><span style="font-size:.6em;color:rgba(240,230,208,.82);letter-spacing:.08em;font-style:normal;">${locationLine}</span>`;
   layer.appendChild(prompt);
 
   // AI reflection line
   const reflectionEl = document.createElement('div');
-  reflectionEl.style.cssText = `font-size:clamp(17px,4.5vw,22px);letter-spacing:.05em;font-style:italic;
-    color:rgba(201,169,110,.95);text-align:center;line-height:1.6;min-height:28px;
-    opacity:0;transition:opacity 1.2s ease;max-width:300px;`;
+  reflectionEl.style.cssText = `font-size:clamp(19px,5vw,24px);letter-spacing:.04em;font-style:italic;
+    color:rgba(201,169,110,.95);text-align:center;line-height:1.6;min-height:30px;
+    opacity:0;transition:opacity 1.2s ease;max-width:320px;`;
   layer.appendChild(reflectionEl);
 
   // Voice orb button — or text input fallback
   const micWrap = document.createElement('div');
-  micWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:12px;';
+  micWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:clamp(14px,4vh,22px);';
 
   let spokenText = '';
   let isListening = false;
@@ -4197,21 +4334,21 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
     recog.lang = lang === 'es' ? 'es-ES' : 'en-US';
 
     const micOrb = document.createElement('button');
-    micOrb.style.cssText = `width:72px;height:72px;border-radius:50%;background:none;
-      border:1.5px solid rgba(201,169,110,.22);cursor:pointer;
+    micOrb.style.cssText = `width:96px;height:96px;border-radius:50%;background:none;
+      border:1.5px solid rgba(201,169,110,.28);cursor:pointer;
       display:flex;align-items:center;justify-content:center;
       -webkit-tap-highlight-color:transparent;transition:all .4s ease;position:relative;`;
-    micOrb.innerHTML = `<span style="font-size:28px;line-height:1;">🎙</span>`;
+    micOrb.innerHTML = `<span style="font-size:38px;line-height:1;">🎙</span>`;
 
     const micLabel = document.createElement('div');
-    micLabel.style.cssText = `font-size:clamp(10px,2.6vw,12px);letter-spacing:.16em;
-      color:rgba(240,230,208,.70);transition:color .4s ease;`;
+    micLabel.style.cssText = `font-size:clamp(13px,3.2vw,15px);letter-spacing:.16em;
+      color:rgba(240,230,208,.72);transition:color .4s ease;`;
     micLabel.textContent = t ? 'tap to speak' : 'toca para hablar';
 
     // Instruction line — what to say
     const instrEl = document.createElement('div');
-    instrEl.style.cssText = `font-size:clamp(11px,2.8vw,13px);letter-spacing:.06em;font-style:italic;
-      color:rgba(240,230,208,.50);text-align:center;max-width:240px;line-height:1.5;margin-top:4px;`;
+    instrEl.style.cssText = `font-size:clamp(13px,3.2vw,15px);letter-spacing:.06em;font-style:italic;
+      color:rgba(240,230,208,.78);text-align:center;max-width:240px;line-height:1.5;margin-top:4px;`;
     instrEl.textContent = t ? 'describe what you feel there' : 'describe lo que sientes ahí';
 
     const interimEl = document.createElement('div');
@@ -4259,7 +4396,7 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
           redoBtn = document.createElement('button');
           redoBtn.className = 'redo-btn';
           redoBtn.style.cssText = `background:none;border:none;font-size:clamp(10px,2.5vw,11px);
-            letter-spacing:.16em;color:rgba(240,230,208,.28);cursor:pointer;padding:4px 12px;
+            letter-spacing:.16em;color:rgba(240,230,208,.60);cursor:pointer;padding:4px 12px;
             font-family:inherit;-webkit-tap-highlight-color:transparent;transition:color .3s ease;`;
           redoBtn.textContent = t ? 'redo' : 'repetir';
           redoBtn.addEventListener('click', () => {
@@ -4289,11 +4426,16 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
 
     // "type instead" toggle
     const typeToggle = document.createElement('button');
-    typeToggle.style.cssText = `background:none;border:none;font-size:clamp(10px,2.5vw,11px);
-      letter-spacing:.16em;color:rgba(240,230,208,.25);cursor:pointer;padding:6px 12px;
-      font-family:inherit;-webkit-tap-highlight-color:transparent;transition:color .3s ease;
-      margin-top:4px;`;
+    typeToggle.style.cssText = `background:none;border:none;font-size:clamp(11px,2.8vw,13px);
+      letter-spacing:.16em;color:rgba(240,230,208,.62);cursor:pointer;padding:6px 12px;
+      font-family:inherit;-webkit-tap-highlight-color:transparent;transition:color .3s ease, opacity 0.8s ease;
+      margin-top:4px;opacity:0;pointer-events:none;`;
     typeToggle.textContent = t ? 'type instead' : 'escribir';
+    // Reveal after 4s — give voice a real chance first
+    setTimeout(() => {
+      typeToggle.style.opacity = '1';
+      typeToggle.style.pointerEvents = 'auto';
+    }, 4000);
 
     const typeWrap = document.createElement('div');
     typeWrap.style.cssText = 'display:none;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:280px;margin-top:4px;';
@@ -4372,11 +4514,11 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
   // Continue/skip button — always visible
   const continueBtn = document.createElement('button');
   continueBtn.style.cssText = `background:none;border:none;
-    font-size:clamp(10px,2.6vw,12px);letter-spacing:.2em;
-    color:rgba(240,230,208,.22);cursor:pointer;padding:10px 20px;
+    font-size:clamp(11px,2.8vw,13px);letter-spacing:.2em;
+    color:rgba(240,230,208,.65);cursor:pointer;padding:10px 20px;
     font-family:inherit;-webkit-tap-highlight-color:transparent;
     transition:color .4s ease, opacity .4s ease;
-    opacity:0.22;pointer-events:none;`;
+    opacity:0.65;pointer-events:none;`;
   continueBtn.textContent = t ? 'skip' : 'omitir';
   continueBtn.addEventListener('click', () => {
     layer.style.transition = 'opacity 0.8s ease';
@@ -4416,7 +4558,7 @@ async function getVoiceReflection(spokenText, zoneKey, shadowWord, toneKey, refl
     continueBtn.style.pointerEvents = 'auto';
   }, 12000);
 
-  reflectionEl.style.color = 'rgba(201,169,110,.25)';
+  reflectionEl.style.color = 'rgba(201,169,110,.65)';
   reflectionEl.textContent = '·  ·  ·';
 
   const toneLabel = { pleasant: 'pleasant', unpleasant: 'unpleasant', neutral: 'neutral' };
@@ -4463,8 +4605,9 @@ async function getVoiceReflection(spokenText, zoneKey, shadowWord, toneKey, refl
   // Show continue after reflection has time to land
   setTimeout(() => {
     clearTimeout(fallbackTimer);
+    continueBtn.textContent = lang === 'en' ? 'continue →' : 'continuar →';
     continueBtn.style.opacity = '1';
-    continueBtn.style.color = 'rgba(240,230,208,.82)';
+    continueBtn.style.color = 'rgba(240,230,208,.88)';
     continueBtn.style.pointerEvents = 'auto';
   }, 4000);
 }
@@ -4890,10 +5033,36 @@ Your first question should go deeper into what they already named — not restat
   document.querySelectorAll('[id*="tapEl"], .dec-tap-hint').forEach(el => { el.textContent = ''; el.style.opacity = '0'; });
 
   showScreen('s-chamber', () => {
-    setTimeout(() => { contextEl.style.opacity = '1'; }, 600);
+    // Immediate anchor — shadow word + zone visible before AI responds
+    setTimeout(() => { contextEl.style.opacity = '1'; }, 200);
+
+    // Breathing dots — holds attention during API latency
+    const loadingDots = document.createElement('div');
+    loadingDots.id = 'chamber-loading';
+    loadingDots.style.cssText = `font-size:clamp(18px,4.5vw,22px);letter-spacing:.4em;
+      color:rgba(240,230,208,.55);text-align:center;opacity:0;transition:opacity 0.8s ease;
+      font-family:'Cormorant Garamond',Georgia,serif;`;
+    loadingDots.textContent = '·  ·  ·';
+    msgsEl.appendChild(loadingDots);
+    setTimeout(() => { loadingDots.style.opacity = '1'; }, 400);
+
+    // Animate dots
+    let dotPhase = 0;
+    const dotTexts = ['·  ·  ·', '·  ·   ', '·      ', '·  ·  ·'];
+    const dotInterval = setInterval(() => {
+      dotPhase = (dotPhase + 1) % dotTexts.length;
+      loadingDots.textContent = dotTexts[dotPhase];
+    }, 500);
+
     // Opening AI question arrives after a beat
     setTimeout(() => {
       chamberCallAI(() => {
+        // Remove loading dots when AI responds
+        clearInterval(dotInterval);
+        loadingDots.style.transition = 'opacity 0.4s ease';
+        loadingDots.style.opacity = '0';
+        setTimeout(() => { if (loadingDots.parentNode) loadingDots.remove(); }, 400);
+
         // Show input and skip after first AI message
         setTimeout(() => {
           inputWrap.style.opacity = '1';
@@ -4907,7 +5076,7 @@ Your first question should go deeper into what they already named — not restat
           }
         }, 600);
       });
-    }, 1800);
+    }, 1200);
   });
 
   // Skip always available
@@ -5139,12 +5308,15 @@ function startDecBreath(displayName) {
   decOrb.wordText = displayName;
   decOrb.wordTargetAlpha = 0;
   decOrb.wordGlowIntensity = 0.4; // steady moderate glow throughout
+  decOrb.alpha = 0; // start invisible — fades in with breath layer
 
   decOrb.onPhaseChange = (phase) => {
     if (phase === 'inhale') {
       // Word glows on inhale — being seen, held in awareness
       decOrb.wordTargetAlpha = 0.85;
       decOrb.wordGlowIntensity = 0.5 + decOrb.cycleCount * 0.15;
+      // Colour arc: cycle 0=red-amber, 1=rose, 2=violet-cream
+      decOrb.wordColorPhase = Math.min(decOrb.cycleCount, 2);
     } else if (phase === 'hold') {
       decOrb.wordTargetAlpha = 0.65;
       decOrb.wordGlowIntensity = 0.4;
@@ -5154,11 +5326,25 @@ function startDecBreath(displayName) {
       decOrb.wordGlowIntensity = 0.1;
     } else if (phase === 'rest') {
       decOrb.wordTargetAlpha = 0.25;
+    } else if (phase === 'morph') {
+      // Luminous cream-white for ascent
+      decOrb.wordColorPhase = 3;
+      decOrb.wordTargetAlpha = 1;
+      decOrb.wordGlowIntensity = 1;
     }
   };
 
-  // Register orb so render loop draws it
-  window._decOrb = decOrb;
+  // Register orb after breath layer fades in — no pop-in during crossfade
+  setTimeout(() => {
+    window._decOrb = decOrb;
+    // Fade orb in smoothly
+    const fadeIn = () => {
+      if (!window._decOrb) return;
+      decOrb.alpha = Math.min((decOrb.alpha || 0) + 0.02, 1);
+      if (decOrb.alpha < 1) requestAnimationFrame(fadeIn);
+    };
+    requestAnimationFrame(fadeIn);
+  }, 1100);
 
   let cycle = 0;
   const decTimers = [];
@@ -5204,7 +5390,6 @@ function startDecBreath(displayName) {
       dDelay(() => {
         if (window._decOrb) {
           const orb = window._decOrb;
-          // Set morph parameters for ascent
           orb.MORPH_DURATION = 2200;
           orb.MORPH_LIFT = innerHeight * 0.52;
           orb.morphStartY = orb.y;
@@ -5214,6 +5399,26 @@ function startDecBreath(displayName) {
           orb.onMorphDone = () => {
             stopWitnessDrone(2.5);
             if (window._decOrb) { window._decOrb.alpha = 0; window._decOrb = null; }
+
+            // Bridge message — fills the gap before s-dec-end arrives
+            const bridge = document.createElement('div');
+            bridge.style.cssText = `position:fixed;inset:0;display:flex;align-items:center;
+              justify-content:center;z-index:30;pointer-events:none;
+              opacity:0;transition:opacity 1.6s ease;`;
+            bridge.innerHTML = `<div style="font-size:clamp(18px,5vw,26px);font-weight:300;
+              font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
+              letter-spacing:.06em;color:rgba(240,230,208,.88);text-align:center;
+              line-height:1.6;max-width:300px;padding:0 32px;">
+              ${lang === 'en' ? displayName + ' was witnessed.' : displayName + ' fue atestiguado.'}
+            </div>`;
+            document.body.appendChild(bridge);
+            requestAnimationFrame(() => { bridge.style.opacity = '1'; });
+            // Remove when dec-end screen takes over
+            setTimeout(() => {
+              bridge.style.transition = 'opacity 0.8s ease';
+              bridge.style.opacity = '0';
+              setTimeout(() => bridge.remove(), 800);
+            }, 1800);
           };
         }
       }, 800);
