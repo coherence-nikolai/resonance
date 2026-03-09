@@ -13,7 +13,7 @@
 // [AE1]  obsCoherenceWord + dec-end-line get fieldTitleBreathe animation variant
 // [AE2]  Orb hover: brief full-sharp pulse before state collapse
 // [AE3]  shadow-orb base opacity raised to .82
-// [AE4]  dec-witnessed buttons re-timed for quieter landing
+// [AE4]  dec-witnessed buttons delayed to 12s (was 8s)
 // [AE5]  Crystallised breath glow shifted to deep gold rgba(240,190,60,...)
 // [AE6]  mv-hint opacity raised to .42
 // [AE7]  tapNext/taph pulse speed varies: collapse-intro 1.8s, observe 3.8s, default 2.8s
@@ -3781,12 +3781,15 @@ function buildShadowGrid(tokenOverride) {
           el.style.background = 'rgba(150,78,84,.12)';
         }
       });
-      // Keep the witness container visible; only hand off the inner content.
-      grid.style.transition = 'opacity 0.25s ease';
+      grid.style.transition = 'opacity 0.55s ease';
+      setTimeout(() => {
+        if (token !== witnessFlowToken || currentMode !== 'witness') return;
+        grid.style.opacity = '0';
+      }, 130);
       setTimeout(() => {
         if (token !== witnessFlowToken || currentMode !== 'witness') return;
         showDecBodyMap();
-      }, 420);
+      }, 520);
     };
     o.addEventListener('pointerup', e => { e.preventDefault(); go(); });
     o.addEventListener('keydown', e => {
@@ -3874,38 +3877,24 @@ function showBodyMap(mode, payload) {
   // Build DOM into the right container
   let container, wrap;
   if (isDecohere) {
+    const grid = document.getElementById('shadowGrid');
     const line = document.getElementById('decArrivalLine');
     const sub  = document.getElementById('decArrivalSub');
-    const hint = document.getElementById('decTapHint');
-    if (line) { line.style.transition = 'opacity 0.32s ease'; line.style.opacity = '0'; }
-    if (sub)  { sub.style.transition  = 'opacity 0.32s ease'; sub.style.opacity  = '0'; }
-    if (hint) { hint.style.transition = 'opacity 0.24s ease'; hint.style.opacity = '0'; }
-
-    // Use the dedicated body-map screen for witness as well.
-    // This avoids injecting a fixed full-screen layer inside the shadow-grid,
-    // which has been causing a blank-screen handoff on some runs.
-    const screen = document.getElementById('s-bodymap');
-    screen.innerHTML = '';
-    const bwrap = document.createElement('div');
-    bwrap.className = 'bodymap-wrap bodymap-wrap-witness';
-    bwrap.id = 'bodymapWrap';
-    bwrap.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;max-width:none;margin:0;display:block;opacity:0;pointer-events:auto;';
-    screen.appendChild(bwrap);
-    wrap = bwrap;
-
-    const mainCv = document.getElementById('cv');
-    if (mainCv) {
-      mainCv.style.transition = 'opacity 0.45s ease';
-      mainCv.style.opacity = '0';
-    }
-
-    // Keep witness mode semantics for logic/animation, but show the body map
-    // in the dedicated screen so the transition is robust and visible.
-    showScreen('s-bodymap');
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => { if (wrap) wrap.style.opacity = '1'; });
-    });
-    buildDecohere();
+    if (line) { line.style.transition = 'opacity 0.4s ease'; line.style.opacity = '0'; }
+    if (sub)  { sub.style.transition  = 'opacity 0.4s ease'; sub.style.opacity  = '0'; }
+    const scr = document.getElementById('s-witness');
+    if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; }
+    // Fade witness screen out, then inject body map
+    if (scr) { scr.style.transition = 'opacity 0.5s ease'; scr.style.opacity = '0'; }
+    setTimeout(() => {
+      grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 1.0s ease;"></div>';
+      wrap = document.getElementById('bodymapWrap');
+      if (scr) { scr.style.opacity = '1'; scr.style.transition = 'none'; }
+      const mainCv = document.getElementById('cv');
+      if (mainCv) mainCv.style.opacity = '0';
+      setTimeout(() => { if (wrap) wrap.style.opacity = '1'; }, 60);
+      buildDecohere();
+    }, 520);
   } else {
     // Collapse: use dedicated s-bodymap screen
     const screen = document.getElementById('s-bodymap');
@@ -4448,12 +4437,7 @@ function showTonePicker(container, onSelect) {
 function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComplete) {
   // Destroy the fixed body map wrap so it never bleeds through
   const bmw = document.getElementById('bodymapWrap');
-  if (bmw) {
-    bmw.style.transition = 'opacity 0.18s ease';
-    bmw.style.opacity = '0';
-    bmw.style.pointerEvents = 'none';
-    setTimeout(() => { if (bmw.parentNode) bmw.parentNode.removeChild(bmw); }, 80);
-  }
+  if (bmw) { bmw.style.opacity = '0'; setTimeout(() => { if (bmw.parentNode) bmw.parentNode.removeChild(bmw); }, 400); }
   const decTapHint = document.getElementById('decTapHint');
   if (decTapHint) decTapHint.textContent = '';
   const hasSpeech = ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
@@ -4474,7 +4458,7 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
   layer.id = 'voice-sense-layer';
   layer.style.cssText = `position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:clamp(24px,7vh,44px);
-    background:rgba(10,8,5,.86);transition:background 0.8s ease;padding:0 clamp(24px,8vw,52px);`;
+    background:rgba(14,12,10,0);transition:background 1.2s ease;padding:0 clamp(24px,8vw,52px);`;
   document.body.appendChild(layer);
 
   // Prompt text
@@ -5588,7 +5572,7 @@ function startDecBreath(displayName) {
         }
       }, 1520);
       // Give the witnessed state a little longer to settle before the end screen arrives.
-      dDelay(() => showDecEnd(), 6200);
+      dDelay(() => showDecEnd(), 5900);
       return;
     }
     cycle++;
@@ -5670,7 +5654,7 @@ function showDecEnd() {
     const sentence = (WITNESSED[lang] && WITNESSED[lang][decStateName]) || '';
     witnessed.textContent = sentence;
     witnessed.style.opacity = '0';
-    witnessed.style.transition = 'opacity 1.95s ease';
+    witnessed.style.transition = 'opacity 1.8s ease';
   }
 
   const btns = document.querySelector('.dec-btns');
@@ -5685,14 +5669,14 @@ function showDecEnd() {
     if (endLine) endLine.classList.add('breathing-glow');
 
     // Let the close arrive in quiet first, then bring in the witnessed sentence.
-    setTimeout(() => { if (witnessed && currentMode === 'witness-end') witnessed.style.opacity = '1'; }, 3200);
+    setTimeout(() => { if (witnessed && currentMode === 'witness-end') witnessed.style.opacity = '1'; }, 3000);
     // Buttons still wait for a real contemplative pause, but no longer trap the user.
     setTimeout(() => {
       if (btns && currentMode === 'witness-end') {
         btns.style.opacity='1';
         btns.style.pointerEvents='all';
       }
-    }, 6000);
+    }, 6400);
   });
 }
 

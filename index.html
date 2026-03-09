@@ -539,23 +539,23 @@ html,body { margin:0;padding:0;width:100%;height:100%;background:var(--bg);
 .shadow-orb{
   display:inline-flex;align-items:center;justify-content:center;
   padding:clamp(10px,2.8vw,16px) clamp(16px,4vw,28px);
-  cursor:pointer;background:rgba(126,70,86,.06);
-  border:1px solid rgba(174,112,128,.18);border-radius:40px;
+  cursor:pointer;background:rgba(126,70,86,.08);
+  border:1px solid rgba(174,112,128,.22);border-radius:40px;
   -webkit-tap-highlight-color:transparent;touch-action:manipulation;
   letter-spacing:.06em;text-align:center;
   font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;
   font-size:clamp(22px,6vw,30px);
-  color:rgba(226,188,194,.84);
-  animation:shadowAgitate 5.8s ease-in-out infinite;
-  transition:color .45s ease, border-color .45s ease, background .45s ease, opacity .4s ease, filter .4s ease;}
+  color:rgba(226,188,194,.90);
+  animation:shadowAgitate 4.8s ease-in-out infinite;
+  transition:color .3s ease, border-color .3s ease, background .3s ease, opacity .4s ease, filter .4s ease;}
 .shadow-orb:active{color:rgba(240,210,214,1);border-color:rgba(186,126,140,.48);
   background:rgba(126,70,86,.14);}
 @keyframes shadowAgitate{
   0%,100%{transform:translate(0,0) rotate(0deg);}
-  20%{transform:translate(-0.25px,0.35px) rotate(-0.08deg);}
-  40%{transform:translate(0.35px,-0.25px) rotate(0.08deg);}
-  60%{transform:translate(-0.25px,0.15px) rotate(-0.05deg);}
-  80%{transform:translate(0.25px,0.35px) rotate(0.06deg);}
+  20%{transform:translate(-0.4px,0.5px) rotate(-0.14deg);}
+  40%{transform:translate(0.6px,-0.4px) rotate(0.12deg);}
+  60%{transform:translate(-0.4px,0.2px) rotate(-0.08deg);}
+  80%{transform:translate(0.4px,0.5px) rotate(0.1deg);}
 }
 
 /* Witness breath */
