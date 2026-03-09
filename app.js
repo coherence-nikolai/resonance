@@ -36,6 +36,58 @@ let breathRunning = false, breathCycle = 0, curStateName = '', spChosen = 0;
 let breathOrb = null;
 let collapseStage = 0, isTransitioning = false, particlesHidden = false;
 let screenTransitionToken = 0;
+
+// Global activity guards — prevent stale timers/callbacks from painting onto the wrong screen
+let activityToken = 0;
+const activityTimeouts = new Map();
+const activityIntervals = new Map();
+
+function clearActivityTimers(token) {
+  const tos = activityTimeouts.get(token);
+  if (tos) { tos.forEach(id => clearTimeout(id)); activityTimeouts.delete(token); }
+  const ints = activityIntervals.get(token);
+  if (ints) { ints.forEach(id => clearInterval(id)); activityIntervals.delete(token); }
+}
+
+function nextActivityToken() {
+  const prev = activityToken;
+  if (prev) clearActivityTimers(prev);
+  activityToken = Date.now() + Math.floor(Math.random()*1000);
+  return activityToken;
+}
+
+function isCurrentActivity(token) {
+  return token === activityToken;
+}
+
+function activityTimeout(token, fn, delay=0) {
+  const id = setTimeout(() => {
+    const set = activityTimeouts.get(token);
+    if (set) set.delete(id);
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) { console.error(e); }
+  }, delay);
+  if (!activityTimeouts.has(token)) activityTimeouts.set(token, new Set());
+  activityTimeouts.get(token).add(id);
+  return id;
+}
+
+function activityInterval(token, fn, delay=0) {
+  const id = setInterval(() => {
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) { console.error(e); }
+  }, delay);
+  if (!activityIntervals.has(token)) activityIntervals.set(token, new Set());
+  activityIntervals.get(token).add(id);
+  return id;
+}
+
+function activityFrame(token, fn) {
+  requestAnimationFrame(() => {
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) { console.error(e); }
+  });
+}
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
 let currentMode = 'home';
 let audioEnabled = true;

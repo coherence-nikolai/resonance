@@ -1,5 +1,5 @@
 // Cache-first — app works fully offline after first load
-const CACHE = 'field-v11-observe-storm-stillfix';
+const CACHE = 'field-v17-witness-entry-runtime-fix';
 const PRECACHE = [
   './',
   './index.html',
