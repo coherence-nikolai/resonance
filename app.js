@@ -113,15 +113,7 @@ class Pt {
     this.alpha = Math.random() * 0.22 + 0.04;
     this.targetAlpha = this.alpha;
   }
-  update() {
-    if (Date.now() < bgPauseUntil) {
-      this.alpha += (this.targetAlpha - this.alpha) * 0.04;
-      return;
-    }
-    this.y += this.vy;
-    if (this.y < -5) this.reset(false);
-    this.alpha += (this.targetAlpha - this.alpha) * 0.04;
-  }
+  update() { this.y += this.vy; if (this.y < -5) this.reset(false); this.alpha += (this.targetAlpha - this.alpha) * 0.04; }
   draw() {
     cx.globalAlpha = this.alpha * bgDimLevel; cx.fillStyle = '#f0cc88';
     cx.beginPath(); cx.arc(this.x, this.y, this.r, 0, Math.PI*2); cx.fill(); cx.globalAlpha = 1;
@@ -129,7 +121,6 @@ class Pt {
 }
 const bgPts = Array.from({length:70}, () => new Pt());
 let bgDimTarget = 1; let bgDimLevel = 1;
-let bgPauseUntil = 0;
 
 // ── DEVICE TILT PARALLAX ──
 let tiltX = 0, tiltY = 0; // -1 to 1 smoothed
@@ -520,7 +511,7 @@ let clarityLevel = 0, particleVisible = false;
 class KasinaParticle {
   constructor() {
     this.x = innerWidth * 0.5;
-    this.y = innerHeight * 0.47;
+    this.y = innerHeight * 0.5;
     this.r = 6;
     this.alpha = 0; this.targetAlpha = 1;
     this.breathPh = 0;
@@ -555,28 +546,21 @@ class KasinaParticle {
   update() {
     this.breathPh  += 0.016;
     this.pulsePh   += 0.08;
-    this.shudderPh += 0.16;
-    if (this.crystallinityDisp >= 0.999) this.rayPh += 0;
-    else if (this.crystallinityDisp > 0.65) this.rayPh += 0.0012;
-    else this.rayPh += 0.0024 + this.crystallinityDisp * 0.002;
+    this.shudderPh += 0.28;
+    this.rayPh     += 0.003 + this.crystallinityDisp * 0.005; // rays spin faster as crystallised
     this.flickPh   += 0.35;
+
+    // Shudder reduces as crystallinity increases — becomes perfectly still when done
+    const baseShudder = isStill
+      ? 0.6 + 0.9 * Math.sin(this.shudderPh) * Math.cos(this.shudderPh * 1.7)
+      : 2.5 + 5 * Math.random();
+    const shudderFactor = 1 - this.crystallinityDisp * 0.92;
+    this.shudderX = (Math.random() - 0.5) * baseShudder * shudderFactor;
+    this.shudderY = (Math.random() - 0.5) * baseShudder * shudderFactor;
+    this.alpha += (this.targetAlpha - this.alpha) * 0.025;
 
     // Smooth crystallinity toward target
     this.crystallinityDisp += (this.crystallinity - this.crystallinityDisp) * 0.04;
-
-    // Orbital micro-motion that stays centred; perfectly still when crystallised
-    const c = this.crystallinityDisp;
-    const motionScale = Math.max(0, 1 - c * 1.12);
-    const baseAmpX = isStill ? 0.55 : 1.1;
-    const baseAmpY = isStill ? 0.35 : 0.75;
-    if (c >= 0.995) {
-      this.shudderX = 0;
-      this.shudderY = 0;
-    } else {
-      this.shudderX = Math.sin(this.shudderPh) * baseAmpX * motionScale;
-      this.shudderY = Math.cos(this.shudderPh * 0.87) * baseAmpY * motionScale;
-    }
-    this.alpha += (this.targetAlpha - this.alpha) * 0.025;
 
     // Age ripples
     this.pulseRipples = this.pulseRipples.filter(rp => {
@@ -589,12 +573,11 @@ class KasinaParticle {
     const c = this.crystallinityDisp; // 0=diffuse, 1=crystallised
     const px = this.x + this.shudderX;
     const py = this.y + this.shudderY;
-    const tapEase = Math.max(0, 1 - ((performance.now() - this.lastTapTime) / 220));
 
     // Breath is dampened as crystallinity increases — stillness
     const breathAmp = 0.32 * (1 - c * 0.75);
     const breathFactor = 0.68 + breathAmp * Math.sin(this.breathPh);
-    const microPulse   = 1 + (0.07 - c * 0.05) * Math.sin(this.pulsePh) + tapEase * 0.06;
+    const microPulse   = 1 + (0.07 - c * 0.05) * Math.sin(this.pulsePh);
     const flicker      = 0.88 + 0.12 * Math.sin(this.flickPh);
 
     // Core grows and sharpens with crystallinity
@@ -602,10 +585,10 @@ class KasinaParticle {
 
     // Glow halos: at c=0 very large/blurry, at c=1 tight and bright
     const blurScale  = 1 - c * 0.65;  // blur reduces
-    const glowScale  = 0.3 + c * 0.7 + tapEase * 0.12; // glow intensity increases
-    const g1 = (20 + c * 18) * breathFactor * blurScale;   // inner
-    const g2 = (72 - c * 26) * breathFactor * blurScale;   // mid
-    const g3 = (145 - c * 70) * breathFactor * blurScale;  // corona
+    const glowScale  = 0.3 + c * 0.7; // glow intensity increases
+    const g1 = (22 + c * 18) * breathFactor * blurScale;   // inner
+    const g2 = (80 - c * 30) * breathFactor * blurScale;   // mid
+    const g3 = (160 - c * 80) * breathFactor * blurScale;  // corona
 
     cx.save();
 
@@ -641,14 +624,13 @@ class KasinaParticle {
       cx.filter = 'none';
     }
 
-    // ── Rays — emerge later and settle into the final star ──
-    if (c > 0.34) {
-      const rayAlphaBase = (c - 0.34) / 0.66; // 0→1 as c goes 0.34→1
+    // ── Rays — emerge from stage 2 onward, sharpen fully ──
+    if (c > 0.2) {
+      const rayAlphaBase = (c - 0.2) / 0.8; // 0→1 as c goes 0.2→1
       const rayCount = this.NUM_RAYS;
       for (let i = 0; i < rayCount; i++) {
         const angle = this.rayPh + (Math.PI * 2 / rayCount) * i;
-        const finalHold = c > 0.985 ? 1 : 0;
-        const lenPulse = finalHold ? 1 : (0.55 + 0.45 * Math.sin(this.breathPh * 1.3 + i * 0.8));
+        const lenPulse = 0.55 + 0.45 * Math.sin(this.breathPh * 1.3 + i * 0.8);
         const rayLen   = (g1 * 1.8 + c * 80) * lenPulse * breathFactor;
         const rayWidth = r * (0.18 - c * 0.08);
         const rayAlpha = (0.10 + c * 0.28) * this.alpha * lenPulse * flicker * rayAlphaBase;
@@ -1396,6 +1378,15 @@ function settingsToggleLang() {
 }
 
 // ── LANG ──
+function setLang(nextLang) {
+  if (nextLang !== 'en' && nextLang !== 'es') return;
+  if (lang === nextLang) return;
+  lang = nextLang;
+  lsSet('field_lang', lang);
+  applyLang();
+  updateSettingsToggles();
+}
+
 function toggleLang() {
   lang = lang === 'en' ? 'es' : 'en';
   lsSet('field_lang', lang);
@@ -1421,9 +1412,12 @@ function applyLang() {
   document.getElementById('obsCohLine').innerHTML = t.obsCoherenceLine.replace(/\n/g,'<br>');
   document.getElementById('obsCohTap').textContent = t.obsCoherenceTap;
   document.getElementById('revisitBtn').textContent = 'revisit introduction';
-  // Home screen lang toggle — shows the OTHER language as the option
   const hlb = document.getElementById('homeLangBtn');
   if (hlb) hlb.textContent = lang === 'en' ? 'español' : 'english';
+  const homeLangEnBtn = document.getElementById('homeLangEnBtn');
+  const homeLangEsBtn = document.getElementById('homeLangEsBtn');
+  if (homeLangEnBtn) homeLangEnBtn.classList.toggle('active', lang === 'en');
+  if (homeLangEsBtn) homeLangEsBtn.classList.toggle('active', lang === 'es');
   updateHomeCount();
 }
 function updateHomeCount() {
@@ -2258,8 +2252,7 @@ function doAffirm() {
       // Full crystallisation — brief hold then coherence
       const btn2 = document.getElementById('affirmBtn');
       if (btn2) { btn2.textContent = lang === 'en' ? 'crystallised' : 'cristalizado'; btn2.style.color = 'rgba(255,248,200,.95)'; btn2.style.borderColor = 'rgba(255,240,160,.8)'; }
-      bgPauseUntil = Date.now() + 1100;
-      setTimeout(() => reachObsCoherence(), 2100);
+      setTimeout(() => reachObsCoherence(), 1800);
     } else {
       updateSignalDots();
     }
