@@ -3781,15 +3781,12 @@ function buildShadowGrid(tokenOverride) {
           el.style.background = 'rgba(150,78,84,.12)';
         }
       });
-      grid.style.transition = 'opacity 0.55s ease';
-      setTimeout(() => {
-        if (token !== witnessFlowToken || currentMode !== 'witness') return;
-        grid.style.opacity = '0';
-      }, 130);
+      // Keep the witness container visible; only hand off the inner content.
+      grid.style.transition = 'opacity 0.25s ease';
       setTimeout(() => {
         if (token !== witnessFlowToken || currentMode !== 'witness') return;
         showDecBodyMap();
-      }, 520);
+      }, 420);
     };
     o.addEventListener('pointerup', e => { e.preventDefault(); go(); });
     o.addEventListener('keydown', e => {
@@ -3883,18 +3880,18 @@ function showBodyMap(mode, payload) {
     if (line) { line.style.transition = 'opacity 0.4s ease'; line.style.opacity = '0'; }
     if (sub)  { sub.style.transition  = 'opacity 0.4s ease'; sub.style.opacity  = '0'; }
     const scr = document.getElementById('s-witness');
-    if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; }
-    // Fade witness screen out, then inject body map
-    if (scr) { scr.style.transition = 'opacity 0.5s ease'; scr.style.opacity = '0'; }
-    setTimeout(() => {
-      grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 1.0s ease;"></div>';
-      wrap = document.getElementById('bodymapWrap');
-      if (scr) { scr.style.opacity = '1'; scr.style.transition = 'none'; }
-      const mainCv = document.getElementById('cv');
-      if (mainCv) mainCv.style.opacity = '0';
-      setTimeout(() => { if (wrap) wrap.style.opacity = '1'; }, 60);
-      buildDecohere();
-    }, 520);
+    if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; scr.style.opacity = '1'; scr.style.transition = 'none'; }
+    // Do not fade the witness screen or its parent container to zero here.
+    // Replace only the shadow-grid contents with the body-map layer so the handoff stays visible.
+    grid.style.opacity = '1';
+    grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 0.7s ease;"></div>';
+    wrap = document.getElementById('bodymapWrap');
+    const mainCv = document.getElementById('cv');
+    if (mainCv) mainCv.style.opacity = '0';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { if (wrap) wrap.style.opacity = '1'; });
+    });
+    buildDecohere();
   } else {
     // Collapse: use dedicated s-bodymap screen
     const screen = document.getElementById('s-bodymap');
