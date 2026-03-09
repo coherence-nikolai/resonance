@@ -35,6 +35,7 @@ let audioCtx = null, droneNodes = [], breathTimers = [], decBreathTimers = [];
 let breathRunning = false, breathCycle = 0, curStateName = '', spChosen = 0;
 let breathOrb = null;
 let collapseStage = 0, isTransitioning = false, particlesHidden = false;
+let screenTransitionToken = 0;
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
 let currentMode = 'home';
 let audioEnabled = true;
@@ -241,6 +242,7 @@ function seedSelectedState(st, idx, orbEl) {
     orbEl.classList.remove('seeded');
     orbEl.classList.add('collapsing');
     spChosen = choice ? choice.i : idx;
+    isTransitioning = false;
     selectState(st);
   }, 540);
 }
@@ -1293,44 +1295,61 @@ function playDecohereSignature() {
 // ── SCREEN TRANSITIONS ──
 function showScreen(id, postCb) {
   resumeAudio();
+  const token = ++screenTransitionToken;
   const gh = document.getElementById('ghosts');
-  if (gh) {
-    if (id !== 's-collapse' && id !== 's-field') {
-      gh.style.transition = 'none';
-      gh.style.opacity = '0';
-      gh.innerHTML = '';
-    }
+  if (gh && id !== 's-collapse' && id !== 's-field') {
+    gh.style.transition = 'none';
+    gh.style.opacity = '0';
+    gh.innerHTML = '';
   }
-  const next = document.getElementById(id);
-  const current = document.querySelector('.screen.active');
-  if (current === next) { if (postCb) postCb(); return; }
 
-  const showNext = () => {
+  const next = document.getElementById(id);
+  if (!next) { if (postCb) postCb(); return; }
+  const activeScreens = Array.from(document.querySelectorAll('.screen.active'));
+  const current = activeScreens.find(el => el !== next) || null;
+
+  if (current === next && activeScreens.length === 1) {
+    if (postCb) requestAnimationFrame(postCb);
+    return;
+  }
+
+  const activateNext = () => {
+    if (token !== screenTransitionToken) return;
+    activeScreens.forEach(el => {
+      if (el !== next) {
+        el.classList.remove('active');
+        el.style.opacity = '';
+        el.style.transition = '';
+      }
+    });
+    next.classList.add('active');
     next.style.opacity = '0';
     next.style.transition = 'none';
-    next.classList.add('active');
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      next.style.transition = 'opacity 0.8s ease';
+    requestAnimationFrame(() => {
+      if (token !== screenTransitionToken) return;
+      next.style.transition = 'opacity 0.72s ease';
       next.style.opacity = '1';
       setTimeout(() => {
+        if (token !== screenTransitionToken) return;
         next.style.opacity = '';
         next.style.transition = '';
         if (postCb) postCb();
-      }, 820);
-    }));
+      }, 740);
+    });
   };
 
   if (current) {
-    current.style.transition = 'opacity 0.55s ease';
+    current.style.transition = 'opacity 0.42s ease';
     current.style.opacity = '0';
     setTimeout(() => {
+      if (token !== screenTransitionToken) return;
       current.classList.remove('active');
       current.style.opacity = '';
       current.style.transition = '';
-      showNext();
-    }, 560);
+      activateNext();
+    }, 430);
   } else {
-    showNext();
+    activateNext();
   }
 }
 
@@ -1431,19 +1450,26 @@ function settingsToggleFont() {
   updateSettingsToggles();
 }
 function settingsToggleLang() {
-  lang = lang === 'en' ? 'es' : 'en';
+  setLang(lang === 'en' ? 'es' : 'en');
+}
+
+// ── LANG ──
+function setLang(nextLang) {
+  if (nextLang !== 'en' && nextLang !== 'es') return;
+  if (lang === nextLang) return;
+  lang = nextLang;
   lsSet('field_lang', lang);
   applyLang();
   updateSettingsToggles();
 }
-
-// ── LANG ──
 function toggleLang() {
+
   lang = lang === 'en' ? 'es' : 'en';
   lsSet('field_lang', lang);
   applyLang();
 }
 function applyLang() {
+  document.documentElement.lang = lang;
   const t = TRANSLATIONS[lang];
   document.getElementById('homeFieldSub').textContent = t.fieldSub;
   document.getElementById('mvObserveLabel').textContent = t.observeLabel;
@@ -1464,8 +1490,10 @@ function applyLang() {
   document.getElementById('obsCohTap').textContent = t.obsCoherenceTap;
   document.getElementById('revisitBtn').textContent = 'revisit introduction';
   // Home screen lang toggle — shows the OTHER language as the option
-  const hlb = document.getElementById('homeLangBtn');
-  if (hlb) hlb.textContent = lang === 'en' ? 'español' : 'english';
+  const hlEn = document.getElementById('homeLangEn');
+  const hlEs = document.getElementById('homeLangEs');
+  if (hlEn) hlEn.classList.toggle('active', lang === 'en');
+  if (hlEs) hlEs.classList.toggle('active', lang === 'es');
   updateHomeCount();
 }
 function updateHomeCount() {
@@ -1552,7 +1580,7 @@ function goHome() {
     const stillWhisper = document.getElementById('still-whisper');
     if (stillWhisper) { stillWhisper.style.opacity = '0'; }
     const stillTxt = document.getElementById('stillTxt');
-    if (stillTxt) { stillTxt.style.opacity = ''; }
+    if (stillTxt) { stillTxt.style.transition = ''; stillTxt.style.opacity = ''; }
     const stillOrbZone = document.getElementById('still-orb-zone');
     if (stillOrbZone) { stillOrbZone.innerHTML = ''; stillOrbZone.style.opacity = ''; }
     const stillThreadWrap = document.getElementById('still-thread-wrap');
@@ -2835,9 +2863,7 @@ function selectState(state) {
   isTransitioning = true; // [TECH3]
   if (navigator.vibrate) navigator.vibrate(38);
   initAudio(); if(audioCtx.state==='suspended') audioCtx.resume();
-  playCollapseSound();
   const b = document.getElementById('burst');
-  b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
   const t = TRANSLATIONS[lang];
   curStateName = state.name;
   document.getElementById('cword').textContent = state.name;
@@ -2873,6 +2899,9 @@ function selectState(state) {
   particlesHidden = false;
   fadeDrone(true, 1.5);
   showScreen('s-collapse', () => {
+    const b = document.getElementById('burst');
+    if (b) { b.classList.remove('go'); void b.offsetWidth; b.classList.add('go'); }
+    playCollapseSound();
     isTransitioning = false; // [TECH3] clear after transition completes
     setTimeout(() => {
       const gh = document.getElementById('ghosts');
@@ -3152,7 +3181,10 @@ function enterStill() {
 
   spParticles.forEach(p => { p.targetAlpha = 0.12 + Math.random()*0.08; });
 
-  document.getElementById('stillTxt').innerHTML = t.stillTxt.replace(/\n/g,'<br>');
+  const stillTxtEl = document.getElementById('stillTxt');
+  stillTxtEl.style.transition = 'none';
+  stillTxtEl.style.opacity = '0';
+  stillTxtEl.innerHTML = t.stillTxt.replace(/\n/g,'<br>');
   const stillBackEl = document.getElementById('stillBack');
   stillBackEl.textContent = t.retBtn;
   stillBackEl.style.opacity = '0';
@@ -3175,6 +3207,12 @@ function enterStill() {
     sc.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 2.5s ease;';
     orbZone.appendChild(sc);
     setTimeout(() => { sc.style.opacity = '1'; }, 300);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        stillTxtEl.style.transition = 'opacity 1.6s ease';
+        stillTxtEl.style.opacity = '1';
+      });
+    });
 
     const sx = sc.getContext('2d');
     let stillPh = 0, stillBreathPh = 0;
@@ -3281,6 +3319,8 @@ function enterStill() {
         ? 'una cosa verdadera de esta sesión'
         : 'one true thing from this session';
 
+      const oldStillResponse = document.getElementById('still-ai-response');
+      if (oldStillResponse) oldStillResponse.remove();
       const stillResponseEl = document.createElement('div');
       stillResponseEl.id = 'still-ai-response';
       threadWrap.appendChild(stillResponseEl);
