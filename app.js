@@ -48,6 +48,7 @@ function clearActivityFrames() {
 function nextActivityToken() {
   activityToken += 1;
   clearActivityFrames();
+  clearActivityTimers();
   return activityToken;
 }
 function isCurrentActivity(token) {
@@ -60,6 +61,32 @@ function activityFrame(token, fn) {
     try { fn(); } catch(e) {}
   });
   activityFrameIds.add(id);
+  return id;
+}
+
+let activityTimeoutIds = new Set();
+let activityIntervalIds = new Set();
+function clearActivityTimers() {
+  activityTimeoutIds.forEach(id => { try { clearTimeout(id); } catch(e) {} });
+  activityIntervalIds.forEach(id => { try { clearInterval(id); } catch(e) {} });
+  activityTimeoutIds.clear();
+  activityIntervalIds.clear();
+}
+function activityTimeout(token, fn, delay) {
+  const id = setTimeout(() => {
+    activityTimeoutIds.delete(id);
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) {}
+  }, delay);
+  activityTimeoutIds.add(id);
+  return id;
+}
+function activityInterval(token, fn, delay) {
+  const id = setInterval(() => {
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) {}
+  }, delay);
+  activityIntervalIds.add(id);
   return id;
 }
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
@@ -3744,45 +3771,56 @@ function startDecohere() {
   currentMode = 'witness'; showBackBtn();
   document.getElementById('backBtn').onclick = () => goHome();
   clearGhosts();
-  // Violet colour temperature for Witness movement
   applyDecoherePalette();
   fadeDrone(true, 1.5); spParticles = [];
-  setTimeout(() => {
-    if (!isCurrentActivity(witnessToken)) return;
+
+  const grid = document.getElementById('shadowGrid');
+  if (grid) {
+    grid.innerHTML = '';
+    grid.style.opacity = '0';
+    grid.style.transform = 'translateY(10px)';
+    grid.style.transition = 'none';
+  }
+
+  activityTimeout(witnessToken, () => {
     initSpParticles(10);
     spParticles.forEach(p => {
       p.targetAlpha = 0.18 + Math.random()*0.15;
       p.targetClarity = 0;
       p.phV *= 0.4;
     });
-  }, 300);
-  buildShadowGrid();
+  }, 220);
+
   const t = TRANSLATIONS[lang];
   const scr = document.getElementById('s-witness');
   if (scr) { scr.style.paddingTop = ''; scr.style.gap = ''; }
   const arrLine = document.getElementById('decArrivalLine');
   const arrSub  = document.getElementById('decArrivalSub');
-  // Set content but keep hidden — fade in after screen transition to prevent double-render jump
   arrLine.textContent = t.decArrivalLine;
   arrSub.textContent  = t.decArrivalSub;
-  arrLine.style.transition = 'none'; arrLine.style.opacity = '0';
-  arrSub.style.transition  = 'none'; arrSub.style.opacity  = '0';
+  arrLine.style.transition = 'none'; arrLine.style.opacity = '0'; arrLine.style.transform = 'translateY(8px)';
+  arrSub.style.transition  = 'none'; arrSub.style.opacity  = '0'; arrSub.style.transform = 'translateY(8px)';
   const tapHint = document.getElementById('decTapHint');
   if (tapHint) tapHint.textContent = '';
+
   showScreen('s-witness', () => {
     if (!isCurrentActivity(witnessToken)) return;
     activityFrame(witnessToken, () => {
-      arrLine.style.transition = 'opacity 0.45s ease';
-      arrSub.style.transition  = 'opacity 0.45s ease';
+      if (!isCurrentActivity(witnessToken)) return;
+      arrLine.style.transition = 'opacity 0.42s ease, transform 0.42s ease';
+      arrSub.style.transition  = 'opacity 0.42s ease, transform 0.42s ease';
       arrLine.style.opacity = '1';
       arrSub.style.opacity  = '1';
+      arrLine.style.transform = 'translateY(0)';
+      arrSub.style.transform  = 'translateY(0)';
+      activityTimeout(witnessToken, () => buildShadowGrid(witnessToken), 140);
     });
   });
 }
 
-function buildShadowGrid() {
-  const token = activityToken;
+function buildShadowGrid(token = activityToken) {
   const grid = document.getElementById('shadowGrid');
+  if (!grid) return;
   grid.innerHTML = '';
   grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
     'align-content:center;justify-content:center;gap:clamp(8px,2.5vw,16px);' +
@@ -3791,24 +3829,28 @@ function buildShadowGrid() {
   const en = SHADOW_STATES.en, es = SHADOW_STATES.es;
 
   grid.style.opacity = '0';
-  grid.style.transition = 'opacity 0.35s ease';
-  activityFrame(token, () => { if (grid && isCurrentActivity(token)) grid.style.opacity = '1'; });
+  grid.style.transform = 'translateY(10px)';
+  grid.style.transition = 'opacity 0.42s ease, transform 0.42s ease';
+  activityFrame(token, () => {
+    if (grid && isCurrentActivity(token)) {
+      grid.style.opacity = '1';
+      grid.style.transform = 'translateY(0)';
+    }
+  });
 
   en.forEach((name, i) => {
     const displayName = lang === 'en' ? name : es[i];
 
     const o = document.createElement('button');
     o.className = 'shadow-orb';
-    o.style.opacity = '0';
-    // Individual vibration — random duration and delay so each word moves independently
     const dur = (2.2 + Math.random() * 1.8).toFixed(2);
     const delay = (Math.random() * -3).toFixed(2);
     o.style.animationDuration = dur + 's';
     o.style.animationDelay = delay + 's';
-    o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
+    o.style.transition = 'opacity 0.42s ease, color .3s ease, border-color .3s ease, background .3s ease, transform 0.42s ease';
+    o.style.opacity = '0';
+    o.style.transform = 'translateY(6px)';
     o.textContent = displayName;
-
-    o.style.opacity = '1';
 
     const go = () => {
       if (audioCtx) playTap();
@@ -3825,8 +3867,12 @@ function buildShadowGrid() {
       activityTimeout(token, () => showDecBodyMap(), 260);
     };
     o.addEventListener('click', go);
-    o.addEventListener('touchend', e => { e.preventDefault(); go(); });
     grid.appendChild(o);
+    activityFrame(token, () => {
+      if (!isCurrentActivity(token)) return;
+      o.style.opacity = '1';
+      o.style.transform = 'translateY(0)';
+    });
   });
 }
 
@@ -4222,12 +4268,13 @@ function showBodyMap(mode, payload) {
         qEl.style.opacity = '0';
 
         // After 2.2s — figure dissolves, transition
-        setTimeout(() => {
+        activityTimeout(token, () => {
           ceremonyEl.style.transition = 'opacity 1.4s ease, color 1s ease, text-shadow 1s ease';
           ceremonyEl.style.opacity = '0';
           fc.style.opacity = '0'; // canvas fades = body-to-orb dissolve
 
-          setTimeout(() => {
+          activityTimeout(token, () => {
+            if (!isCurrentActivity(token)) return;
             cancelAnimationFrame(figRafId);
             decBodySpot = z.key;
             const mainCv = document.getElementById('cv');
@@ -4235,12 +4282,12 @@ function showBodyMap(mode, payload) {
 
             // Tone picker — pleasant / unpleasant / neutral
             showTonePicker(wrap, (toneKey) => {
+              if (!isCurrentActivity(token)) return;
               decSomaticTone = toneKey;
               decSomaticSpoken = ''; // reset for new session
-              // Log the somatic data
               logSession({ type: 'somatic', shadow: decStateName, zone: z.key, tone: toneKey, ts: Date.now() });
-              // Voice sensing layer — speak into the zone before chamber
               showVoiceSensingLayer(wrap, z.key, decStateName, toneKey, (spokenText) => {
+                if (!isCurrentActivity(token)) return;
                 if (spokenText) decSomaticSpoken = spokenText;
                 const apiKey = lsGet('field_api_key');
                 if (apiKey) { startDissolutionChamber(); } else { startDecAcknowledge(); }
