@@ -3726,14 +3726,14 @@ function buildShadowGrid() {
   const grid = document.getElementById('shadowGrid');
   grid.innerHTML = '';
   grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
-    'align-content:center;justify-content:center;gap:clamp(10px,2.8vw,18px);' +
+    'align-content:center;justify-content:center;gap:clamp(8px,2.5vw,16px);' +
     'padding:0 clamp(16px,5vw,32px);';
 
   const en = SHADOW_STATES.en, es = SHADOW_STATES.es;
 
   grid.style.opacity = '0';
-  grid.style.transition = 'opacity 1.6s ease';
-  setTimeout(() => { if (currentMode === 'witness') grid.style.opacity = '1'; }, 320);
+  grid.style.transition = 'opacity 1.35s ease';
+  setTimeout(() => { grid.style.opacity = '1'; }, 260);
 
   en.forEach((name, i) => {
     const displayName = lang === 'en' ? name : es[i];
@@ -3741,16 +3741,15 @@ function buildShadowGrid() {
     const o = document.createElement('button');
     o.className = 'shadow-orb';
     o.style.opacity = '0';
-    // Softer independent drift — enough to feel alive, not busy.
-    const dur = (3.4 + Math.random() * 1.4).toFixed(2);
-    const delay = (Math.random() * -4).toFixed(2);
+    // Individual vibration — random duration and delay so each word moves independently
+    const dur = (2.2 + Math.random() * 1.8).toFixed(2);
+    const delay = (Math.random() * -3).toFixed(2);
     o.style.animationDuration = dur + 's';
     o.style.animationDelay = delay + 's';
-    o.style.transition = 'opacity 1.35s ease, color .45s ease, border-color .45s ease, background .45s ease, filter .45s ease';
-    o.style.filter = 'saturate(.9)';
+    o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
     o.textContent = displayName;
 
-    setTimeout(() => { if (currentMode === 'witness') o.style.opacity = '0.82'; }, 110 * i + 260);
+    setTimeout(() => { o.style.opacity = '1'; }, 80 * i + 200);
 
     const go = () => {
       if (audioCtx) playTap();
@@ -5516,56 +5515,46 @@ function startDecBreath(displayName) {
     if (cycle >= 3) {
       if (backBtn) { backBtn.style.opacity='1'; backBtn.style.pointerEvents='all'; backBtn.onclick = () => goHome(); }
       dDelay(() => {
-        hideBtext(1.1);
+        hideBtext(1.0);
         playDecohereRelease();
-        bgDimTarget = 0.16;
-        if (window._decOrb) {
-          const orb = window._decOrb;
-          orb.startPhase('crystallised');
-          orb.wordTargetAlpha = 0.88;
-          orb.wordGlowIntensity = 0.48;
-          orb.dispGlow *= 0.92;
-          orb.ripples = [];
-        }
-      }, 420);
-      // Let the witnessed state rest in a softer, quieter hold before it lifts out.
+      }, 400);
+      // Ascending morph — orb rises and blooms upward, violet palette
       dDelay(() => {
         if (window._decOrb) {
           const orb = window._decOrb;
-          orb.MORPH_DURATION = 2500;
-          orb.MORPH_LIFT = innerHeight * 0.48;
+          orb.MORPH_DURATION = 2200;
+          orb.MORPH_LIFT = innerHeight * 0.52;
           orb.morphStartY = orb.y;
-          orb.wordTargetAlpha = 0.96;
-          orb.wordGlowIntensity = 0.72;
+          orb.wordTargetAlpha = 1;
+          orb.wordGlowIntensity = 1;
           orb.startPhase('morph');
           orb.onMorphDone = () => {
-            stopWitnessDrone(2.8);
+            stopWitnessDrone(2.5);
             if (window._decOrb) { window._decOrb.alpha = 0; window._decOrb = null; }
 
             // Bridge message — fills the gap before s-dec-end arrives
             const bridge = document.createElement('div');
             bridge.style.cssText = `position:fixed;inset:0;display:flex;align-items:center;
               justify-content:center;z-index:30;pointer-events:none;
-              opacity:0;transition:opacity 1.8s ease;`;
+              opacity:0;transition:opacity 1.6s ease;`;
             bridge.innerHTML = `<div style="font-size:clamp(18px,5vw,26px);font-weight:300;
               font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
-              letter-spacing:.06em;color:rgba(240,230,208,.86);text-align:center;
-              line-height:1.7;max-width:300px;padding:0 32px;">
+              letter-spacing:.06em;color:rgba(240,230,208,.88);text-align:center;
+              line-height:1.6;max-width:300px;padding:0 32px;">
               ${lang === 'en' ? displayName + ' was witnessed.' : displayName + ' fue atestiguado.'}
             </div>`;
             document.body.appendChild(bridge);
             requestAnimationFrame(() => { bridge.style.opacity = '1'; });
             // Remove when dec-end screen takes over
             setTimeout(() => {
-              bridge.style.transition = 'opacity 1.3s ease';
+              bridge.style.transition = 'opacity 0.8s ease';
               bridge.style.opacity = '0';
-              setTimeout(() => bridge.remove(), 1300);
-            }, 3000);
+              setTimeout(() => bridge.remove(), 800);
+            }, 1800);
           };
         }
-      }, 1520);
-      // Give the witnessed state a little longer to settle before the end screen arrives.
-      dDelay(() => showDecEnd(), 5900);
+      }, 800);
+      dDelay(() => showDecEnd(), 4200);
       return;
     }
     cycle++;
@@ -5626,16 +5615,15 @@ function showDecEnd() {
   spParticles = Array.from({length:12}, (_,i) => new SpParticle(i,12));
   spParticles.forEach(p => {
     p._flickering = false; // [TECH2]
-    p.x = innerWidth/2 + (Math.random()-0.5)*14;
-    p.y = innerHeight/2 + (Math.random()-0.5)*14;
+    p.x = innerWidth/2 + (Math.random()-0.5)*20;
+    p.y = innerHeight/2 + (Math.random()-0.5)*20;
     p.targetAlpha = 0;
     p.targetClarity = 0;
-    p.phV *= 0.22;
-    p.driftR *= 0.45;
+    p.phV *= 0.5;
   });
   setTimeout(() => {
-    spParticles.forEach(p => { p.targetAlpha = 0.12 + Math.random()*0.08; });
-  }, 900);
+    spParticles.forEach(p => { p.targetAlpha = 0.22 + Math.random()*0.2; });
+  }, 600);
 
   // decEndLine intentionally left empty — WITNESSED sentence is the complete close
   document.getElementById('decEndLine').textContent = '';
@@ -5647,11 +5635,10 @@ function showDecEnd() {
     const sentence = (WITNESSED[lang] && WITNESSED[lang][decStateName]) || '';
     witnessed.textContent = sentence;
     witnessed.style.opacity = '0';
-    witnessed.style.transition = 'opacity 1.8s ease';
   }
 
   const btns = document.querySelector('.dec-btns');
-  if (btns) { btns.style.opacity='0'; btns.style.transition='opacity 1.6s ease'; btns.style.pointerEvents='none'; }
+  if (btns) { btns.style.opacity='0'; btns.style.transition='opacity 1.4s ease'; btns.style.pointerEvents='none'; }
 
   const backBtn = document.getElementById('backBtn');
   if (backBtn) { backBtn.onclick = () => goHome(); }
@@ -5661,15 +5648,9 @@ function showDecEnd() {
     const endLine = document.getElementById('decEndLine');
     if (endLine) endLine.classList.add('breathing-glow');
 
-    // Let the close arrive in quiet first, then bring in the witnessed sentence.
-    setTimeout(() => { if (witnessed && currentMode === 'witness-end') witnessed.style.opacity = '1'; }, 2600);
-    // Buttons still wait for a real contemplative pause, but no longer trap the user.
-    setTimeout(() => {
-      if (btns && currentMode === 'witness-end') {
-        btns.style.opacity='1';
-        btns.style.pointerEvents='all';
-      }
-    }, 6900);
+    setTimeout(() => { if (witnessed) witnessed.style.opacity = '1'; }, 1500);
+    // [AE4] Witnessed sentence breathes for longer — buttons at 12s (was 8s)
+    setTimeout(() => { if (btns) { btns.style.opacity='1'; btns.style.pointerEvents='all'; } }, 12000);
   });
 }
 

@@ -1,5 +1,5 @@
 // Cache-first — app works fully offline after first load
-const CACHE = 'field-v14-witness-soften';
+const CACHE = 'field-v12-witness-phase1';
 const PRECACHE = [
   './',
   './index.html',
