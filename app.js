@@ -48,6 +48,7 @@ function clearActivityFrames() {
 function nextActivityToken() {
   activityToken += 1;
   clearActivityFrames();
+  clearActivityTimers();
   return activityToken;
 }
 function isCurrentActivity(token) {
@@ -60,6 +61,32 @@ function activityFrame(token, fn) {
     try { fn(); } catch(e) {}
   });
   activityFrameIds.add(id);
+  return id;
+}
+
+let activityTimeoutIds = new Set();
+let activityIntervalIds = new Set();
+function clearActivityTimers() {
+  activityTimeoutIds.forEach(id => { try { clearTimeout(id); } catch(e) {} });
+  activityIntervalIds.forEach(id => { try { clearInterval(id); } catch(e) {} });
+  activityTimeoutIds.clear();
+  activityIntervalIds.clear();
+}
+function activityTimeout(token, fn, delay) {
+  const id = setTimeout(() => {
+    activityTimeoutIds.delete(id);
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) {}
+  }, delay);
+  activityTimeoutIds.add(id);
+  return id;
+}
+function activityInterval(token, fn, delay) {
+  const id = setInterval(() => {
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) {}
+  }, delay);
+  activityIntervalIds.add(id);
   return id;
 }
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
@@ -3735,100 +3762,153 @@ function getDecBodyPos(spot) {
   };
 }
 
+
 function startDecohere() {
   const witnessToken = nextActivityToken();
   if (navigator.vibrate) navigator.vibrate(18);
   initAudio();
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
   playDecohereSignature();
-  currentMode = 'witness'; showBackBtn();
-  document.getElementById('backBtn').onclick = () => goHome();
+  currentMode = 'witness';
+  showBackBtn();
+  const backBtn = document.getElementById('backBtn');
+  if (backBtn) backBtn.onclick = () => goHome();
+
   clearGhosts();
-  // Violet colour temperature for Witness movement
   applyDecoherePalette();
-  fadeDrone(true, 1.5); spParticles = [];
-  setTimeout(() => {
-    if (!isCurrentActivity(witnessToken)) return;
-    initSpParticles(10);
-    spParticles.forEach(p => {
-      p.targetAlpha = 0.18 + Math.random()*0.15;
-      p.targetClarity = 0;
-      p.phV *= 0.4;
-    });
-  }, 300);
-  buildShadowGrid();
+  fadeDrone(true, 1.5);
+  spParticles = [];
+
   const t = TRANSLATIONS[lang];
   const scr = document.getElementById('s-witness');
-  if (scr) { scr.style.paddingTop = ''; scr.style.gap = ''; }
+  const grid = document.getElementById('shadowGrid');
   const arrLine = document.getElementById('decArrivalLine');
   const arrSub  = document.getElementById('decArrivalSub');
-  // Set content but keep hidden — fade in after screen transition to prevent double-render jump
-  arrLine.textContent = t.decArrivalLine;
-  arrSub.textContent  = t.decArrivalSub;
-  arrLine.style.transition = 'none'; arrLine.style.opacity = '0';
-  arrSub.style.transition  = 'none'; arrSub.style.opacity  = '0';
   const tapHint = document.getElementById('decTapHint');
+
+  if (scr) {
+    scr.style.paddingTop = '';
+    scr.style.gap = '';
+  }
+  if (grid) {
+    grid.innerHTML = '';
+    grid.style.opacity = '0';
+    grid.style.transform = 'translateY(10px)';
+    grid.style.transition = 'none';
+  }
+  if (arrLine) {
+    arrLine.textContent = t.decArrivalLine;
+    arrLine.style.opacity = '0';
+    arrLine.style.transform = 'translateY(8px)';
+    arrLine.style.transition = 'none';
+  }
+  if (arrSub) {
+    arrSub.textContent = t.decArrivalSub;
+    arrSub.style.opacity = '0';
+    arrSub.style.transform = 'translateY(8px)';
+    arrSub.style.transition = 'none';
+  }
   if (tapHint) tapHint.textContent = '';
+
   showScreen('s-witness', () => {
     if (!isCurrentActivity(witnessToken)) return;
+
+    activityTimeout(witnessToken, () => {
+      initSpParticles(10);
+      spParticles.forEach(p => {
+        p.targetAlpha = 0.18 + Math.random() * 0.15;
+        p.targetClarity = 0;
+        p.phV *= 0.4;
+      });
+    }, 180);
+
     activityFrame(witnessToken, () => {
-      arrLine.style.transition = 'opacity 0.45s ease';
-      arrSub.style.transition  = 'opacity 0.45s ease';
-      arrLine.style.opacity = '1';
-      arrSub.style.opacity  = '1';
+      if (arrLine) arrLine.style.transition = 'opacity .55s ease, transform .55s ease';
+      if (arrSub)  arrSub.style.transition  = 'opacity .55s ease, transform .55s ease';
+      if (arrLine) {
+        arrLine.style.opacity = '1';
+        arrLine.style.transform = 'translateY(0)';
+      }
+      activityTimeout(witnessToken, () => {
+        if (arrSub) {
+          arrSub.style.opacity = '1';
+          arrSub.style.transform = 'translateY(0)';
+        }
+      }, 120);
+      activityTimeout(witnessToken, () => buildShadowGrid(witnessToken), 220);
     });
   });
 }
 
-function buildShadowGrid() {
-  const token = activityToken;
+
+
+function buildShadowGrid(token = activityToken) {
   const grid = document.getElementById('shadowGrid');
+  if (!grid) return;
+
+  const en = SHADOW_STATES.en;
+  const es = SHADOW_STATES.es;
+  let selected = false;
+
   grid.innerHTML = '';
-  grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
+  grid.style.cssText =
+    'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
     'align-content:center;justify-content:center;gap:clamp(8px,2.5vw,16px);' +
-    'padding:0 clamp(16px,5vw,32px);';
-
-  const en = SHADOW_STATES.en, es = SHADOW_STATES.es;
-
-  grid.style.opacity = '0';
-  grid.style.transition = 'opacity 0.35s ease';
-  activityFrame(token, () => { if (grid && isCurrentActivity(token)) grid.style.opacity = '1'; });
+    'padding:0 clamp(16px,5vw,32px);' +
+    'opacity:0;transform:translateY(10px);transition:opacity .45s ease, transform .45s ease;';
 
   en.forEach((name, i) => {
     const displayName = lang === 'en' ? name : es[i];
-
     const o = document.createElement('button');
     o.className = 'shadow-orb';
-    o.style.opacity = '0';
-    // Individual vibration — random duration and delay so each word moves independently
-    const dur = (2.2 + Math.random() * 1.8).toFixed(2);
-    const delay = (Math.random() * -3).toFixed(2);
+    const dur = (2.4 + Math.random() * 1.2).toFixed(2);
+    const delay = (Math.random() * -2).toFixed(2);
     o.style.animationDuration = dur + 's';
     o.style.animationDelay = delay + 's';
-    o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
+    o.style.opacity = '1';
+    o.style.transition = 'opacity .28s ease, color .28s ease, border-color .28s ease, background .28s ease, transform .28s ease';
     o.textContent = displayName;
 
-    o.style.opacity = '1';
-
-    const go = () => {
+    const go = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (selected || !isCurrentActivity(token)) return;
+      selected = true;
       if (audioCtx) playTap();
-      decStateName = name; decStateNameES = es[i];
+      decStateName = name;
+      decStateNameES = es[i];
+
       grid.querySelectorAll('.shadow-orb').forEach(el => {
-        el.style.transition = 'opacity 0.5s ease, color 0.5s ease, border-color 0.5s ease';
-        el.style.opacity = el === o ? '1' : '0.06';
+        el.style.pointerEvents = 'none';
         if (el === o) {
+          el.style.opacity = '1';
+          el.style.transform = 'scale(1.02)';
           el.style.color = 'rgba(240,204,136,1)';
           el.style.borderColor = 'rgba(201,169,110,.85)';
           el.style.background = 'rgba(201,169,110,.10)';
+        } else {
+          el.style.opacity = '0.08';
+          el.style.transform = 'scale(0.985)';
         }
       });
+
       activityTimeout(token, () => showDecBodyMap(), 260);
     };
-    o.addEventListener('click', go);
-    o.addEventListener('touchend', e => { e.preventDefault(); go(); });
+
+    o.addEventListener('click', go, { passive: false });
+    o.addEventListener('touchend', go, { passive: false });
     grid.appendChild(o);
   });
+
+  activityFrame(token, () => {
+    if (!isCurrentActivity(token)) return;
+    grid.style.opacity = '1';
+    grid.style.transform = 'translateY(0)';
+  });
 }
+
 
 // ══════════════════════════════════════
 // SHARED BODY MAP — used by both Decohere and Collapse
@@ -3978,16 +4058,16 @@ function showBodyMap(mode, payload) {
     wrap.appendChild(fc);
     const fx = fc.getContext('2d');
 
-    // Figure layout
-    const FIG_TOP = 0.08, FIG_BOT = 0.88;
-    const FIG_L = 0.28, FIG_R = 0.72;
+    // Figure layout — enlarged for iPhone Pro Max while keeping the lower prompt area clear
+    const FIG_TOP = 0.03, FIG_BOT = 0.86;
+    const FIG_L = 0.20, FIG_R = 0.80;
     const figH = (FIG_BOT - FIG_TOP) * H;
     const figW = (FIG_R - FIG_L) * W;
     const figX = FIG_L * W, figY = FIG_TOP * H;
 
     // Shadow word watermark — very faint behind figure
     const watermarkEl = document.createElement('div');
-    watermarkEl.style.cssText = `position:absolute;left:50%;top:46%;
+    watermarkEl.style.cssText = `position:absolute;left:50%;top:44%;
       transform:translate(-50%,-50%);
       font-size:clamp(38px,11vw,72px);font-weight:300;
       font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
@@ -4010,17 +4090,21 @@ function showBodyMap(mode, payload) {
     ceremonyEl.textContent = decStateName || '';
     wrap.appendChild(ceremonyEl);
 
-    // Witness zone map — tuned to the larger figure so taps line up more closely
-    // with visible body regions on tall iPhone screens.
+    // Zone definitions
+    const SPOT_BANDS_Y = {
+      head:    [0.00, 0.18],
+      throat:  [0.13, 0.24],
+      chest:   [0.20, 0.42],
+      stomach: [0.40, 0.54],
+      pelvis:  [0.52, 0.72],
+    };
     const ZONES = [
-      { key:'head',    centerY:0.085, band:[0.00,0.165], left:0.39, right:0.61 },
-      { key:'neck',    centerY:0.182, band:[0.165,0.225], left:0.45, right:0.55 },
-      { key:'chest',   centerY:0.305, band:[0.225,0.390], left:0.30, right:0.70 },
-      { key:'solar',   centerY:0.435, band:[0.390,0.505], left:0.32, right:0.68 },
-      { key:'stomach', centerY:0.555, band:[0.505,0.625], left:0.34, right:0.66 },
-      { key:'groin',   centerY:0.655, band:[0.625,0.715], left:0.44, right:0.56 },
+      { key:'head',    centerY: 0.09 },
+      { key:'throat',  centerY: 0.19 },
+      { key:'chest',   centerY: 0.31 },
+      { key:'stomach', centerY: 0.47 },
+      { key:'pelvis',  centerY: 0.62 },
     ];
-    const SPOT_BANDS_Y = Object.fromEntries(ZONES.map(z => [z.key, z.band]));
 
     // Human silhouette — path-based outline, much more legible
     // All coordinates in normalised [0..1] space relative to figX/figY/figW/figH
@@ -4164,20 +4248,19 @@ function showBodyMap(mode, payload) {
     }
     figRafId = requestAnimationFrame(drawFigure);
 
-    // Invisible hit zones — sized to the visible body rather than the full figure box.
+    // Invisible hit zones — no visible labels, trust the body
     ZONES.forEach((z) => {
-      const [lo, hi] = z.band;
+      const [lo, hi] = SPOT_BANDS_Y[z.key];
       const hitTop = figY + lo * figH;
       const hitH2  = (hi - lo) * figH;
-      const hitL   = figX + z.left * figW;
-      const hitW   = (z.right - z.left) * figW;
+      const hitL   = figX - figW * 0.12;
+      const hitW   = figW * 1.24;
 
       const hitBtn = document.createElement('button');
-      hitBtn.setAttribute('aria-label', z.key);
       hitBtn.style.cssText = `position:absolute;left:${hitL}px;top:${hitTop}px;
         width:${hitW}px;height:${hitH2}px;
         background:none;border:none;cursor:pointer;z-index:3;
-        -webkit-tap-highlight-color:transparent;touch-action:manipulation;`;
+        -webkit-tap-highlight-color:transparent;`;
 
       hitBtn.addEventListener('click', () => {
         if (somatic) return;
@@ -4192,7 +4275,7 @@ function showBodyMap(mode, payload) {
 
         // Zone tone + overtone
         if (audioCtx) {
-          const zoneFreqs = { head:1056, neck:792, chest:528, solar:417, stomach:396, groin:264, throat:792, pelvis:264 };
+          const zoneFreqs = { head:1056, throat:792, chest:528, stomach:396, pelvis:264 };
           const f = zoneFreqs[z.key] || 528;
           const oz = audioCtx.createOscillator(), gz = audioCtx.createGain();
           oz.type='sine'; oz.frequency.value=f;
@@ -4219,12 +4302,13 @@ function showBodyMap(mode, payload) {
         qEl.style.opacity = '0';
 
         // After 2.2s — figure dissolves, transition
-        setTimeout(() => {
+        activityTimeout(token, () => {
           ceremonyEl.style.transition = 'opacity 1.4s ease, color 1s ease, text-shadow 1s ease';
           ceremonyEl.style.opacity = '0';
           fc.style.opacity = '0'; // canvas fades = body-to-orb dissolve
 
-          setTimeout(() => {
+          activityTimeout(token, () => {
+            if (!isCurrentActivity(token)) return;
             cancelAnimationFrame(figRafId);
             decBodySpot = z.key;
             const mainCv = document.getElementById('cv');
@@ -4232,12 +4316,12 @@ function showBodyMap(mode, payload) {
 
             // Tone picker — pleasant / unpleasant / neutral
             showTonePicker(wrap, (toneKey) => {
+              if (!isCurrentActivity(token)) return;
               decSomaticTone = toneKey;
               decSomaticSpoken = ''; // reset for new session
-              // Log the somatic data
               logSession({ type: 'somatic', shadow: decStateName, zone: z.key, tone: toneKey, ts: Date.now() });
-              // Voice sensing layer — speak into the zone before chamber
               showVoiceSensingLayer(wrap, z.key, decStateName, toneKey, (spokenText) => {
+                if (!isCurrentActivity(token)) return;
                 if (spokenText) decSomaticSpoken = spokenText;
                 const apiKey = lsGet('field_api_key');
                 if (apiKey) { startDissolutionChamber(); } else { startDecAcknowledge(); }
@@ -4315,7 +4399,7 @@ function showBodyMap(mode, payload) {
       document.querySelectorAll('.body-node').forEach(x => x.classList.remove('active'));
       b.classList.add('active');
       if (audioCtx) {
-        const zoneFreqs = { head:1056, neck:792, chest:528, solar:417, stomach:396, groin:264, throat:792, pelvis:264 };
+        const zoneFreqs = { head:1056, throat:792, chest:528, stomach:396, pelvis:264 };
         const f = zoneFreqs[spot.key] || 528;
         const oz = audioCtx.createOscillator(), gz = audioCtx.createGain();
         oz.type='sine'; oz.frequency.value=f;
@@ -4478,8 +4562,8 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
 
   const t = lang === 'en';
   const zoneLabels = {
-    en: { head:'head', neck:'neck', chest:'chest', solar:'solar plexus', stomach:'stomach', groin:'groin', throat:'throat', pelvis:'pelvis' },
-    es: { head:'cabeza', neck:'cuello', chest:'pecho', solar:'plexo solar', stomach:'vientre', groin:'ingle', throat:'garganta', pelvis:'pelvis' }
+    en: { head:'head', throat:'throat', chest:'chest', stomach:'stomach', pelvis:'pelvis' },
+    es: { head:'cabeza', throat:'garganta', chest:'pecho', stomach:'vientre', pelvis:'pelvis' }
   };
   const zoneLabel = zoneLabels[lang][zoneKey] || zoneKey;
 
@@ -6092,3 +6176,415 @@ window.addEventListener('keydown', e => {
     if (active && active.id==='s-init') advanceStep();
   }
 });
+
+
+// === Witness rebuild v25: clean linear flow on working base ===
+(function(){
+  const WITNESS_ZONES = [
+    { key:'head',   label:{en:'head', es:'cabeza'},        y:0.105, h:0.12, w:0.28 },
+    { key:'neck',   label:{en:'neck', es:'cuello'},        y:0.215, h:0.08, w:0.20 },
+    { key:'chest',  label:{en:'chest', es:'pecho'},        y:0.335, h:0.15, w:0.44 },
+    { key:'solar',  label:{en:'solar plexus', es:'plexo solar'}, y:0.475, h:0.10, w:0.30 },
+    { key:'stomach',label:{en:'stomach', es:'estómago'},   y:0.58,  h:0.11, w:0.34 },
+    { key:'groin',  label:{en:'groin', es:'ingle'},        y:0.71,  h:0.10, w:0.28 }
+  ];
+
+  function cleanWitnessArtifacts(){
+    const ids = ['bodymapWrap','voice-sense-layer','chamber-loading'];
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+    const tapHint = document.getElementById('decTapHint');
+    if (tapHint) tapHint.textContent = '';
+    const grid = document.getElementById('shadowGrid');
+    if (grid) grid.innerHTML = '';
+  }
+
+  function witnessZoneTone(zoneKey){
+    if (!audioCtx) return;
+    const freqs = { head:1056, neck:792, chest:528, solar:444, stomach:396, groin:264 };
+    const f = freqs[zoneKey] || 528;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0, audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.6);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 1.8);
+  }
+
+  function launchWitnessNextStep(){
+    const apiKey = lsGet('field_api_key');
+    if (apiKey) startDissolutionChamber();
+    else startDecAcknowledge();
+  }
+
+  window.startDecohere = function startDecohere_rebuilt(){
+    const token = nextActivityToken();
+    if (navigator.vibrate) navigator.vibrate(16);
+    initAudio();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+    playDecohereSignature();
+    currentMode = 'witness';
+    showBackBtn();
+    const backBtn = document.getElementById('backBtn');
+    if (backBtn) backBtn.onclick = () => goHome();
+
+    clearGhosts();
+    cleanWitnessArtifacts();
+    applyDecoherePalette();
+    fadeDrone(true, 1.2);
+    spParticles = [];
+
+    const t = TRANSLATIONS[lang];
+    const scr = document.getElementById('s-witness');
+    const grid = document.getElementById('shadowGrid');
+    const arrLine = document.getElementById('decArrivalLine');
+    const arrSub = document.getElementById('decArrivalSub');
+    const tapHint = document.getElementById('decTapHint');
+
+    if (scr) {
+      scr.style.paddingTop = '';
+      scr.style.gap = '';
+    }
+    if (grid) {
+      grid.innerHTML = '';
+      grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:clamp(10px,2.8vw,18px);padding:0 clamp(16px,5vw,34px);opacity:0;transform:translateY(10px);transition:opacity .45s ease, transform .45s ease;';
+    }
+    if (arrLine) {
+      arrLine.textContent = t.decArrivalLine;
+      arrLine.style.opacity = '0';
+      arrLine.style.transform = 'translateY(8px)';
+      arrLine.style.transition = 'opacity .55s ease, transform .55s ease';
+    }
+    if (arrSub) {
+      arrSub.textContent = t.decArrivalSub;
+      arrSub.style.opacity = '0';
+      arrSub.style.transform = 'translateY(8px)';
+      arrSub.style.transition = 'opacity .55s ease, transform .55s ease';
+    }
+    if (tapHint) tapHint.textContent = '';
+
+    showScreen('s-witness', () => {
+      if (!isCurrentActivity(token)) return;
+      activityTimeout(token, () => {
+        initSpParticles(10);
+        spParticles.forEach(p => {
+          p.targetAlpha = 0.16 + Math.random() * 0.12;
+          p.targetClarity = 0;
+          p.phV *= 0.35;
+        });
+      }, 120);
+
+      activityFrame(token, () => {
+        if (arrLine) {
+          arrLine.style.opacity = '1';
+          arrLine.style.transform = 'translateY(0)';
+        }
+        if (arrSub) {
+          activityTimeout(token, () => {
+            arrSub.style.opacity = '1';
+            arrSub.style.transform = 'translateY(0)';
+          }, 90);
+        }
+        activityTimeout(token, () => buildShadowGrid(token), 220);
+      });
+    });
+  };
+
+  window.buildShadowGrid = function buildShadowGrid_rebuilt(token = activityToken){
+    const grid = document.getElementById('shadowGrid');
+    if (!grid) return;
+    const en = SHADOW_STATES.en;
+    const es = SHADOW_STATES.es;
+    let selected = false;
+
+    grid.innerHTML = '';
+    grid.style.opacity = '0';
+    grid.style.transform = 'translateY(10px)';
+
+    en.forEach((name, i) => {
+      const displayName = lang === 'en' ? name : es[i];
+      const btn = document.createElement('button');
+      btn.className = 'shadow-orb';
+      btn.type = 'button';
+      btn.textContent = displayName;
+      btn.style.opacity = '1';
+      btn.style.transition = 'opacity .28s ease, transform .28s ease, color .28s ease, border-color .28s ease, background .28s ease';
+      btn.style.animation = 'none';
+
+      const choose = (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (selected || !isCurrentActivity(token)) return;
+        selected = true;
+        if (audioCtx) playTap();
+        decStateName = name;
+        decStateNameES = es[i];
+        grid.querySelectorAll('.shadow-orb').forEach(el => {
+          el.style.pointerEvents = 'none';
+          if (el === btn) {
+            el.style.opacity = '1';
+            el.style.transform = 'scale(1.03)';
+            el.style.color = 'rgba(240,204,136,1)';
+            el.style.borderColor = 'rgba(201,169,110,.85)';
+            el.style.background = 'rgba(201,169,110,.10)';
+          } else {
+            el.style.opacity = '0.08';
+            el.style.transform = 'scale(0.985)';
+          }
+        });
+        activityTimeout(token, () => showDecBodyMap(token), 180);
+      };
+      btn.addEventListener('pointerup', choose);
+      grid.appendChild(btn);
+    });
+
+    activityFrame(token, () => {
+      if (!isCurrentActivity(token)) return;
+      grid.style.opacity = '1';
+      grid.style.transform = 'translateY(0)';
+    });
+  };
+
+  window.showDecBodyMap = function showDecBodyMap_rebuilt(token = activityToken){
+    if (!isCurrentActivity(token)) return;
+    const line = document.getElementById('decArrivalLine');
+    const sub = document.getElementById('decArrivalSub');
+    const grid = document.getElementById('shadowGrid');
+    const tapHint = document.getElementById('decTapHint');
+    if (line) line.style.opacity = '0';
+    if (sub) sub.style.opacity = '0';
+    if (grid) {
+      grid.style.opacity = '0';
+      grid.style.transform = 'translateY(8px)';
+      grid.style.pointerEvents = 'none';
+    }
+
+    const old = document.getElementById('bodymapWrap');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    const wrap = document.createElement('div');
+    wrap.id = 'bodymapWrap';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity .45s ease;overflow:hidden;';
+    document.body.appendChild(wrap);
+
+    const qEl = document.createElement('div');
+    qEl.style.cssText = 'position:absolute;left:50%;bottom:max(115px,14svh);transform:translateX(-50%);font-size:clamp(19px,5.2vw,26px);font-style:italic;text-align:center;color:rgba(240,230,208,.92);letter-spacing:.02em;line-height:1.45;z-index:5;padding:0 22px;transition:opacity .35s ease;';
+    qEl.textContent = lang === 'en' ? 'where does it live in you?' : '¿dónde vive en ti?';
+    wrap.appendChild(qEl);
+
+    const tapEl = document.createElement('div');
+    tapEl.id = 'bodymap-tap-hint';
+    tapEl.style.cssText = 'position:absolute;left:50%;bottom:max(78px,10svh);transform:translateX(-50%);font-size:clamp(11px,3vw,13px);letter-spacing:.2em;text-transform:uppercase;color:rgba(240,230,208,.52);z-index:5;transition:opacity .35s ease;text-align:center;';
+    tapEl.textContent = lang === 'en' ? 'tap the area you feel it most' : 'toca donde lo sientes más';
+    wrap.appendChild(tapEl);
+
+    const watermarkEl = document.createElement('div');
+    watermarkEl.style.cssText = 'position:absolute;left:50%;top:43%;transform:translate(-50%,-50%);font-size:clamp(40px,11vw,76px);font-weight:300;font-family:"Cormorant Garamond",Georgia,serif;font-style:italic;color:rgba(180,160,210,.06);letter-spacing:.06em;pointer-events:none;z-index:0;white-space:nowrap;transition:opacity .45s ease;';
+    watermarkEl.textContent = lang === 'en' ? decStateName : (decStateNameES || decStateName);
+    wrap.appendChild(watermarkEl);
+
+    const ceremonyEl = document.createElement('div');
+    ceremonyEl.style.cssText = 'position:absolute;left:50%;transform:translate(-50%,-50%);font-size:clamp(26px,7vw,42px);font-weight:300;font-family:"Cormorant Garamond",Georgia,serif;font-style:italic;color:rgba(220,200,240,0);letter-spacing:.06em;text-shadow:0 0 0 rgba(180,160,200,0);pointer-events:none;z-index:6;white-space:nowrap;transition:color .4s ease,text-shadow .4s ease,opacity .6s ease;';
+    ceremonyEl.textContent = lang === 'en' ? decStateName : (decStateNameES || decStateName);
+    wrap.appendChild(ceremonyEl);
+
+    const c = document.createElement('canvas');
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const W = window.innerWidth, H = window.innerHeight;
+    c.width = Math.floor(W * dpr);
+    c.height = Math.floor(H * dpr);
+    c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;transition:opacity .45s ease;';
+    wrap.appendChild(c);
+    const ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const FIG_TOP = 0.03, FIG_BOT = 0.86, FIG_L = 0.20, FIG_R = 0.80;
+    const figH = (FIG_BOT - FIG_TOP) * H;
+    const figW = (FIG_R - FIG_L) * W;
+    const figX = FIG_L * W;
+    const figY = FIG_TOP * H;
+    const cx = figX + figW * 0.5;
+    let activeZone = null;
+    let done = false;
+    let glowPhase = 0;
+    let breathPhase = 0;
+    let rafId = null;
+
+    function zoneRect(z){
+      const w = figW * z.w;
+      const h = figH * z.h;
+      return { x: cx - w/2, y: figY + figH * z.y - h/2, w, h };
+    }
+
+    function roundedRectPath(x,y,w,h,r){
+      const rr = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x+rr,y);
+      ctx.arcTo(x+w,y,x+w,y+h,rr);
+      ctx.arcTo(x+w,y+h,x,y+h,rr);
+      ctx.arcTo(x,y+h,x,y,rr);
+      ctx.arcTo(x,y,x+w,y,rr);
+      ctx.closePath();
+    }
+
+    function drawFigure(){
+      if (currentMode !== 'witness') return;
+      ctx.clearRect(0,0,W,H);
+      glowPhase += 0.02;
+      breathPhase += 0.01;
+      const pulse = 0.5 + 0.5 * Math.sin(breathPhase);
+      const zonePulse = 0.5 + 0.5 * Math.sin(glowPhase*2.2);
+      const lineAlpha = 0.56 + pulse * 0.14;
+      const glowAlpha = 0.10 + pulse * 0.08;
+      const scale = 1 + pulse * 0.012;
+
+      ctx.save();
+      ctx.translate(cx, figY + figH * 0.5);
+      ctx.scale(scale, scale);
+      ctx.translate(-cx, -(figY + figH * 0.5));
+
+      if (activeZone) {
+        const zr = zoneRect(activeZone);
+        const grad = ctx.createRadialGradient(cx, zr.y + zr.h/2, 0, cx, zr.y + zr.h/2, Math.max(zr.h*1.2, zr.w));
+        grad.addColorStop(0, 'rgba(210,185,235,' + (0.18 + zonePulse*0.12).toFixed(3) + ')');
+        grad.addColorStop(1, 'rgba(210,185,235,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0,0,W,H);
+      }
+
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+
+      function strokePath(builder, active){
+        ctx.save();
+        ctx.strokeStyle = 'rgba(210,185,235,1)';
+        ctx.lineWidth = active ? 5.0 : 3.0;
+        ctx.filter = 'blur(' + (active ? 6 : 3) + 'px)';
+        ctx.globalAlpha = active ? (0.22 + zonePulse*0.14) : glowAlpha;
+        builder();
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(230,215,245,1)';
+        ctx.lineWidth = active ? 2.2 : 1.55;
+        ctx.globalAlpha = active ? (0.86 + zonePulse*0.10) : lineAlpha;
+        builder();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      strokePath(() => { ctx.beginPath(); ctx.ellipse(cx, figY + figH*0.09, figW*0.10, figH*0.085, 0, 0, Math.PI*2); }, activeZone && activeZone.key === 'head');
+      strokePath(() => { ctx.beginPath(); ctx.moveTo(cx - figW*0.05, figY + figH*0.165); ctx.lineTo(cx - figW*0.05, figY + figH*0.205); ctx.lineTo(cx + figW*0.05, figY + figH*0.205); ctx.lineTo(cx + figW*0.05, figY + figH*0.165); }, activeZone && activeZone.key === 'neck');
+      strokePath(() => {
+        ctx.beginPath();
+        ctx.moveTo(cx - figW*0.05, figY + figH*0.195);
+        ctx.bezierCurveTo(cx - figW*0.24, figY + figH*0.20, cx - figW*0.34, figY + figH*0.27, cx - figW*0.33, figY + figH*0.37);
+        ctx.bezierCurveTo(cx - figW*0.31, figY + figH*0.51, cx - figW*0.23, figY + figH*0.63, cx - figW*0.18, figY + figH*0.72);
+        ctx.bezierCurveTo(cx - figW*0.17, figY + figH*0.81, cx - figW*0.14, figY + figH*0.89, cx - figW*0.11, figY + figH*0.93);
+        ctx.lineTo(cx - figW*0.06, figY + figH*0.93);
+        ctx.bezierCurveTo(cx - figW*0.05, figY + figH*0.84, cx - figW*0.03, figY + figH*0.72, cx, figY + figH*0.63);
+        ctx.bezierCurveTo(cx + figW*0.03, figY + figH*0.72, cx + figW*0.05, figY + figH*0.84, cx + figW*0.06, figY + figH*0.93);
+        ctx.lineTo(cx + figW*0.11, figY + figH*0.93);
+        ctx.bezierCurveTo(cx + figW*0.14, figY + figH*0.89, cx + figW*0.17, figY + figH*0.81, cx + figW*0.18, figY + figH*0.72);
+        ctx.bezierCurveTo(cx + figW*0.23, figY + figH*0.63, cx + figW*0.31, figY + figH*0.51, cx + figW*0.33, figY + figH*0.37);
+        ctx.bezierCurveTo(cx + figW*0.34, figY + figH*0.27, cx + figW*0.24, figY + figH*0.20, cx + figW*0.05, figY + figH*0.195);
+      }, activeZone && (activeZone.key === 'chest' || activeZone.key === 'solar' || activeZone.key === 'stomach' || activeZone.key === 'groin'));
+      strokePath(() => {
+        ctx.beginPath();
+        ctx.moveTo(cx - figW*0.22, figY + figH*0.22);
+        ctx.bezierCurveTo(cx - figW*0.33, figY + figH*0.29, cx - figW*0.38, figY + figH*0.43, cx - figW*0.40, figY + figH*0.56);
+        ctx.bezierCurveTo(cx - figW*0.38, figY + figH*0.60, cx - figW*0.34, figY + figH*0.60, cx - figW*0.31, figY + figH*0.55);
+        ctx.bezierCurveTo(cx - figW*0.28, figY + figH*0.48, cx - figW*0.25, figY + figH*0.38, cx - figW*0.20, figY + figH*0.28);
+      }, false);
+      strokePath(() => {
+        ctx.beginPath();
+        ctx.moveTo(cx + figW*0.22, figY + figH*0.22);
+        ctx.bezierCurveTo(cx + figW*0.33, figY + figH*0.29, cx + figW*0.38, figY + figH*0.43, cx + figW*0.40, figY + figH*0.56);
+        ctx.bezierCurveTo(cx + figW*0.38, figY + figH*0.60, cx + figW*0.34, figY + figH*0.60, cx + figW*0.31, figY + figH*0.55);
+        ctx.bezierCurveTo(cx + figW*0.28, figY + figH*0.48, cx + figW*0.25, figY + figH*0.38, cx + figW*0.20, figY + figH*0.28);
+      }, false);
+
+      if (activeZone) {
+        const zr = zoneRect(activeZone);
+        ctx.save();
+        roundedRectPath(zr.x, zr.y, zr.w, zr.h, Math.min(zr.w, zr.h)*0.45);
+        ctx.fillStyle = 'rgba(220,200,240,' + (0.06 + zonePulse*0.07).toFixed(3) + ')';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.restore();
+      rafId = requestAnimationFrame(drawFigure);
+    }
+
+    drawFigure();
+
+    let zoneChosen = false;
+    WITNESS_ZONES.forEach((zone) => {
+      const zr = zoneRect(zone);
+      const hit = document.createElement('button');
+      hit.type = 'button';
+      hit.style.cssText = 'position:absolute;left:' + zr.x + 'px;top:' + zr.y + 'px;width:' + zr.w + 'px;height:' + zr.h + 'px;background:none;border:none;cursor:pointer;z-index:3;-webkit-tap-highlight-color:transparent;';
+      hit.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (zoneChosen || !isCurrentActivity(token)) return;
+        zoneChosen = true;
+        activeZone = zone;
+        decBodySpot = zone.label[lang] || zone.label.en;
+        decSomaticTone = '';
+        decSomaticSpoken = '';
+        witnessZoneTone(zone.key);
+        if (tapEl) tapEl.style.opacity = '0';
+        if (qEl) qEl.style.opacity = '0';
+        watermarkEl.style.opacity = '0';
+        ceremonyEl.style.top = (zr.y + zr.h/2) + 'px';
+        ceremonyEl.style.opacity = '1';
+        ceremonyEl.style.color = 'rgba(220,200,240,0.92)';
+        ceremonyEl.style.textShadow = '0 0 40px rgba(180,160,200,0.55)';
+        Array.from(wrap.querySelectorAll('button')).forEach(b => { b.style.pointerEvents = 'none'; });
+        logSession({ type: 'somatic', shadow: decStateName, zone: decBodySpot, ts: Date.now() });
+        activityTimeout(token, () => {
+          if (!isCurrentActivity(token)) return;
+          wrap.style.opacity = '0';
+          if (c) c.style.opacity = '0';
+          ceremonyEl.style.opacity = '0';
+          activityTimeout(token, () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+            launchWitnessNextStep();
+          }, 420);
+        }, 760);
+      });
+      wrap.appendChild(hit);
+    });
+
+    requestAnimationFrame(() => { wrap.style.opacity = '1'; });
+  };
+
+  const originalStartDissolutionChamber = window.startDissolutionChamber;
+  window.startDissolutionChamber = function startDissolutionChamber_rebuilt(){
+    originalStartDissolutionChamber();
+    const backBtn = document.getElementById('backBtn');
+    if (backBtn) backBtn.onclick = () => goHome();
+  };
+
+  const originalStartDecAcknowledge = window.startDecAcknowledge;
+  window.startDecAcknowledge = function startDecAcknowledge_rebuilt(){
+    originalStartDecAcknowledge();
+    const backBtn = document.getElementById('backBtn');
+    if (backBtn) backBtn.onclick = () => goHome();
+  };
+
+  const originalExitChamber = window.exitChamber;
+  window.exitChamber = function exitChamber_rebuilt(){
+    if (typeof originalExitChamber === 'function') originalExitChamber();
+    const backBtn = document.getElementById('backBtn');
+    if (backBtn) backBtn.onclick = () => goHome();
+  };
+})();
