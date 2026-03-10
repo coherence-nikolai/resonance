@@ -1,5 +1,5 @@
 // Cache-first — app works fully offline after first load
-const CACHE = 'field-v17-witness-entry-runtime-fix';
+const CACHE = 'field-v18-witness-back-home-bodymap-size';
 const PRECACHE = [
   './',
   './index.html',

@@ -835,8 +835,8 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
 }
 
 /* Body map */
-.bodymap-wrap{position:relative;width:100%;max-width:320px;height:min(56vh,400px);margin-top:6px;display:flex;align-items:flex-start;}
-.bodymap-figure{position:absolute;left:50%;top:0;transform:translateX(-50%);width:180px;height:100%;pointer-events:none;}
+.bodymap-wrap{position:relative;width:100%;max-width:380px;height:min(64vh,500px);margin-top:0;display:flex;align-items:flex-start;justify-content:center;}
+.bodymap-figure{position:absolute;left:50%;top:0;transform:translateX(-50%);width:min(240px,58vw);height:100%;pointer-events:none;}
 .bodymap-figure canvas{width:100%;height:100%;}
 /* UX3: body-node safe left — JS sets max(8px, 22%) */
 .body-node{position:absolute;left:22%;transform:translateX(-50%);
@@ -974,7 +974,7 @@ body.fs-large .imag-prompt{font-size:clamp(18px,4.8vw,24px);}
   <div class="obs-count-home" id="homeCount"></div>
   <div id="companion-wrap" style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:320px;padding:0 24px;margin-top:4px;"></div>
   <button id="revisitHomeBtn" onclick="revisitIntro()">revisit introduction</button>
-  <div id="guided-hint" onclick="revisitIntro()"></div>
+  <div id="guided-hint" aria-hidden="true"></div>
   <div class="home-lang-toggle" aria-label="Language toggle">
     <button class="home-lang-seg" id="homeLangEn" onclick="setLang('en')">EN</button>
     <button class="home-lang-seg" id="homeLangEs" onclick="setLang('es')">ES</button>

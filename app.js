@@ -37,56 +37,30 @@ let breathOrb = null;
 let collapseStage = 0, isTransitioning = false, particlesHidden = false;
 let screenTransitionToken = 0;
 
-// Global activity guards — prevent stale timers/callbacks from painting onto the wrong screen
+
+// Global activity guard — prevents stale delayed UI callbacks from older screens
 let activityToken = 0;
-const activityTimeouts = new Map();
-const activityIntervals = new Map();
-
-function clearActivityTimers(token) {
-  const tos = activityTimeouts.get(token);
-  if (tos) { tos.forEach(id => clearTimeout(id)); activityTimeouts.delete(token); }
-  const ints = activityIntervals.get(token);
-  if (ints) { ints.forEach(id => clearInterval(id)); activityIntervals.delete(token); }
+let activityFrameIds = new Set();
+function clearActivityFrames() {
+  activityFrameIds.forEach(id => { try { cancelAnimationFrame(id); } catch(e) {} });
+  activityFrameIds.clear();
 }
-
 function nextActivityToken() {
-  const prev = activityToken;
-  if (prev) clearActivityTimers(prev);
-  activityToken = Date.now() + Math.floor(Math.random()*1000);
+  activityToken += 1;
+  clearActivityFrames();
   return activityToken;
 }
-
 function isCurrentActivity(token) {
   return token === activityToken;
 }
-
-function activityTimeout(token, fn, delay=0) {
-  const id = setTimeout(() => {
-    const set = activityTimeouts.get(token);
-    if (set) set.delete(id);
-    if (!isCurrentActivity(token)) return;
-    try { fn(); } catch(e) { console.error(e); }
-  }, delay);
-  if (!activityTimeouts.has(token)) activityTimeouts.set(token, new Set());
-  activityTimeouts.get(token).add(id);
-  return id;
-}
-
-function activityInterval(token, fn, delay=0) {
-  const id = setInterval(() => {
-    if (!isCurrentActivity(token)) return;
-    try { fn(); } catch(e) { console.error(e); }
-  }, delay);
-  if (!activityIntervals.has(token)) activityIntervals.set(token, new Set());
-  activityIntervals.get(token).add(id);
-  return id;
-}
-
 function activityFrame(token, fn) {
-  requestAnimationFrame(() => {
+  const id = requestAnimationFrame(() => {
+    activityFrameIds.delete(id);
     if (!isCurrentActivity(token)) return;
-    try { fn(); } catch(e) { console.error(e); }
+    try { fn(); } catch(e) {}
   });
+  activityFrameIds.add(id);
+  return id;
 }
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
 let currentMode = 'home';
@@ -1527,7 +1501,11 @@ function settingsToggleLang() {
 // ── LANG ──
 function setLang(nextLang) {
   if (nextLang !== 'en' && nextLang !== 'es') return;
-  if (lang === nextLang) return;
+  if (lang === nextLang) {
+    applyLang();
+    updateSettingsToggles();
+    return;
+  }
   lang = nextLang;
   lsSet('field_lang', lang);
   applyLang();
@@ -1563,8 +1541,14 @@ function applyLang() {
   // Home screen lang toggle — shows the OTHER language as the option
   const hlEn = document.getElementById('homeLangEn');
   const hlEs = document.getElementById('homeLangEs');
-  if (hlEn) hlEn.classList.toggle('active', lang === 'en');
-  if (hlEs) hlEs.classList.toggle('active', lang === 'es');
+  if (hlEn) {
+    hlEn.classList.toggle('active', lang === 'en');
+    hlEn.setAttribute('aria-pressed', lang === 'en' ? 'true' : 'false');
+  }
+  if (hlEs) {
+    hlEs.classList.toggle('active', lang === 'es');
+    hlEs.setAttribute('aria-pressed', lang === 'es' ? 'true' : 'false');
+  }
   updateHomeCount();
 }
 function updateHomeCount() {
@@ -1602,6 +1586,7 @@ function clearGhosts() {
 }
 function goHome() {
   closeSettings();
+  const homeToken = nextActivityToken();
   const cameFromDecohere = currentMode === 'witness-end' || currentMode === 'witness';
   currentMode = 'home';
   clearAllBreath(); clearObserver(); clearAllDec();
@@ -1623,10 +1608,43 @@ function goHome() {
 
   clearGhosts();
   // Clear witness/decohere state
+  const witnessScreen = document.getElementById('s-witness');
+  if (witnessScreen) {
+    witnessScreen.style.transition = 'none';
+    witnessScreen.style.opacity = '1';
+    witnessScreen.style.paddingTop = '';
+    witnessScreen.style.gap = '';
+  }
   const grid = document.getElementById('shadowGrid');
-  if (grid) grid.innerHTML = '';
+  if (grid) {
+    grid.innerHTML = '';
+    grid.style.opacity = '';
+    grid.style.transition = '';
+  }
+  const decArrivalLine = document.getElementById('decArrivalLine');
+  if (decArrivalLine) {
+    decArrivalLine.textContent = '';
+    decArrivalLine.style.transition = 'none';
+    decArrivalLine.style.opacity = '0';
+  }
+  const decArrivalSub = document.getElementById('decArrivalSub');
+  if (decArrivalSub) {
+    decArrivalSub.textContent = '';
+    decArrivalSub.style.transition = 'none';
+    decArrivalSub.style.opacity = '0';
+  }
+  const decTapHint = document.getElementById('decTapHint');
+  if (decTapHint) decTapHint.textContent = '';
+  const lingeringBodyMap = document.getElementById('bodymapWrap');
+  if (lingeringBodyMap && lingeringBodyMap.parentNode) lingeringBodyMap.parentNode.removeChild(lingeringBodyMap);
+  const lingeringVoiceLayer = document.getElementById('voice-sense-layer');
+  if (lingeringVoiceLayer && lingeringVoiceLayer.parentNode) lingeringVoiceLayer.parentNode.removeChild(lingeringVoiceLayer);
+  const lingeringTapHint = document.getElementById('bodymap-tap-hint');
+  if (lingeringTapHint && lingeringTapHint.parentNode) lingeringTapHint.parentNode.removeChild(lingeringTapHint);
   const fc = document.getElementById('fc');
   if (fc) { fc.style.opacity = '0'; }
+  const mainCv = document.getElementById('cv');
+  if (mainCv) mainCv.style.opacity = '';
   if (window._decOrb) { window._decOrb = null; }
   companionAsked = false;
   decSomaticTone = ''; decSomaticSpoken = ''; chamberSystemActive = '';
@@ -1660,6 +1678,7 @@ function goHome() {
     document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
     if (cameFromDecohere) {
       setTimeout(() => {
+        if (!isCurrentActivity(homeToken)) return;
         spParticles = Array.from({length:12}, (_,i) => new SpParticle(i,12));
         spParticles.forEach(p => {
           p._flickering = false;
@@ -1669,10 +1688,12 @@ function goHome() {
           p.targetClarity = 0;
         });
         setTimeout(() => {
+          if (!isCurrentActivity(homeToken)) return;
           spParticles.forEach(p => { p.targetAlpha = 0.42+Math.random()*0.22; });
         }, 300);
         // Pulse movement glyphs once — gentle acknowledgement
         setTimeout(() => {
+          if (!isCurrentActivity(homeToken)) return;
           document.querySelectorAll('.movement').forEach((m, i) => {
             setTimeout(() => {
               m.classList.add('lit');
@@ -1682,7 +1703,7 @@ function goHome() {
         }, 1800);
       }, 100);
     } else {
-      setTimeout(() => { initSpParticles(12); tryDrone(); }, 200);
+      setTimeout(() => { if (!isCurrentActivity(homeToken)) return; initSpParticles(12); tryDrone(); }, 200);
     }
     tryDrone();
     // Companion check-in — disabled on auto-show, user can access via settings
@@ -1691,17 +1712,14 @@ function goHome() {
   updateHomeCount();
   document.querySelectorAll('.movement').forEach(m => m.classList.remove('lit'));
 
-  // Guided entry hint — point new users to Observe first
+  // Guided entry hint removed — discovery stays with the user
   const hintEl = document.getElementById('guided-hint');
   const collapseCount = parseInt(lsGet('field_obs')||'0');
   if (hintEl) {
-    const t = lang === 'en';
-    if (collapseCount === 0) {
-      hintEl.textContent = t ? 'new here? · begin with ◎' : '¿nuevo aquí? · empieza con ◎';
-      setTimeout(() => { hintEl.style.opacity = '1'; }, 1800);
-    } else {
-      hintEl.style.opacity = '0';
-    }
+    hintEl.textContent = '';
+    hintEl.style.opacity = '0';
+    hintEl.style.pointerEvents = 'none';
+    hintEl.setAttribute('aria-hidden', 'true');
   }
 
   // Returning user whisper — quiet continuity, no gamification
@@ -3723,132 +3741,92 @@ function startDecohere() {
   initAudio();
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
   playDecohereSignature();
-  currentMode = 'witness';
-  showBackBtn();
+  currentMode = 'witness'; showBackBtn();
   document.getElementById('backBtn').onclick = () => goHome();
   clearGhosts();
+  // Violet colour temperature for Witness movement
   applyDecoherePalette();
-  fadeDrone(true, 1.5);
-  spParticles = [];
-
-  const scr = document.getElementById('s-witness');
-  const grid = document.getElementById('shadowGrid');
-  const arrLine = document.getElementById('decArrivalLine');
-  const arrSub = document.getElementById('decArrivalSub');
-  const tapHint = document.getElementById('decTapHint');
+  fadeDrone(true, 1.5); spParticles = [];
+  setTimeout(() => {
+    if (!isCurrentActivity(witnessToken)) return;
+    initSpParticles(10);
+    spParticles.forEach(p => {
+      p.targetAlpha = 0.18 + Math.random()*0.15;
+      p.targetClarity = 0;
+      p.phV *= 0.4;
+    });
+  }, 300);
+  buildShadowGrid();
   const t = TRANSLATIONS[lang];
-
-  if (scr) {
-    scr.style.paddingTop = '';
-    scr.style.gap = '';
-  }
-  if (grid) {
-    grid.innerHTML = '';
-    grid.style.opacity = '0';
-    grid.style.transform = 'translateY(10px)';
-    grid.style.transition = 'none';
-  }
-  if (arrLine) {
-    arrLine.textContent = t.decArrivalLine;
-    arrLine.style.transition = 'none';
-    arrLine.style.opacity = '0';
-    arrLine.style.transform = 'translateY(8px)';
-  }
-  if (arrSub) {
-    arrSub.textContent = t.decArrivalSub;
-    arrSub.style.transition = 'none';
-    arrSub.style.opacity = '0';
-    arrSub.style.transform = 'translateY(8px)';
-  }
+  const scr = document.getElementById('s-witness');
+  if (scr) { scr.style.paddingTop = ''; scr.style.gap = ''; }
+  const arrLine = document.getElementById('decArrivalLine');
+  const arrSub  = document.getElementById('decArrivalSub');
+  // Set content but keep hidden — fade in after screen transition to prevent double-render jump
+  arrLine.textContent = t.decArrivalLine;
+  arrSub.textContent  = t.decArrivalSub;
+  arrLine.style.transition = 'none'; arrLine.style.opacity = '0';
+  arrSub.style.transition  = 'none'; arrSub.style.opacity  = '0';
+  const tapHint = document.getElementById('decTapHint');
   if (tapHint) tapHint.textContent = '';
-
   showScreen('s-witness', () => {
     if (!isCurrentActivity(witnessToken)) return;
-
-    activityTimeout(witnessToken, () => {
-      initSpParticles(10);
-      spParticles.forEach(p => {
-        p.targetAlpha = 0.18 + Math.random() * 0.15;
-        p.targetClarity = 0;
-        p.phV *= 0.4;
-      });
-    }, 120);
-
     activityFrame(witnessToken, () => {
-      if (!isCurrentActivity(witnessToken)) return;
-      if (arrLine) {
-        arrLine.style.transition = 'opacity 0.42s ease, transform 0.42s ease';
-        arrLine.style.opacity = '1';
-        arrLine.style.transform = 'translateY(0)';
-      }
-      if (arrSub) {
-        arrSub.style.transition = 'opacity 0.42s ease, transform 0.42s ease';
-        arrSub.style.opacity = '1';
-        arrSub.style.transform = 'translateY(0)';
-      }
+      arrLine.style.transition = 'opacity 0.45s ease';
+      arrSub.style.transition  = 'opacity 0.45s ease';
+      arrLine.style.opacity = '1';
+      arrSub.style.opacity  = '1';
     });
-
-    activityTimeout(witnessToken, () => buildShadowGrid(witnessToken), 140);
   });
 }
 
-function buildShadowGrid(token = activityToken) {
+function buildShadowGrid() {
+  const token = activityToken;
   const grid = document.getElementById('shadowGrid');
-  if (!grid || !isCurrentActivity(token)) return;
-
   grid.innerHTML = '';
-  grid.style.cssText = 'width:100%;flex:1;min-height:340px;display:flex;flex-wrap:wrap;' +
+  grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
     'align-content:center;justify-content:center;gap:clamp(8px,2.5vw,16px);' +
-    'padding:0 clamp(16px,5vw,32px);opacity:0;transform:translateY(12px);' +
-    'transition:opacity 0.40s ease, transform 0.40s ease;';
+    'padding:0 clamp(16px,5vw,32px);';
 
   const en = SHADOW_STATES.en, es = SHADOW_STATES.es;
-  let selected = false;
+
+  grid.style.opacity = '0';
+  grid.style.transition = 'opacity 0.35s ease';
+  activityFrame(token, () => { if (grid && isCurrentActivity(token)) grid.style.opacity = '1'; });
 
   en.forEach((name, i) => {
     const displayName = lang === 'en' ? name : es[i];
+
     const o = document.createElement('button');
     o.className = 'shadow-orb';
+    o.style.opacity = '0';
+    // Individual vibration — random duration and delay so each word moves independently
     const dur = (2.2 + Math.random() * 1.8).toFixed(2);
     const delay = (Math.random() * -3).toFixed(2);
     o.style.animationDuration = dur + 's';
     o.style.animationDelay = delay + 's';
-    o.style.opacity = '1';
-    o.style.transform = 'translateY(0)';
-    o.style.transition = 'opacity 0.35s ease, color .3s ease, border-color .3s ease, background .3s ease, transform .35s ease';
+    o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
     o.textContent = displayName;
 
+    o.style.opacity = '1';
+
     const go = () => {
-      if (selected || !isCurrentActivity(token)) return;
-      selected = true;
       if (audioCtx) playTap();
-      decStateName = name;
-      decStateNameES = es[i];
+      decStateName = name; decStateNameES = es[i];
       grid.querySelectorAll('.shadow-orb').forEach(el => {
-        el.style.transition = 'opacity 0.35s ease, color 0.35s ease, border-color 0.35s ease, background 0.35s ease, transform 0.35s ease';
+        el.style.transition = 'opacity 0.5s ease, color 0.5s ease, border-color 0.5s ease';
+        el.style.opacity = el === o ? '1' : '0.06';
         if (el === o) {
-          el.style.opacity = '1';
-          el.style.transform = 'scale(1.02)';
           el.style.color = 'rgba(240,204,136,1)';
           el.style.borderColor = 'rgba(201,169,110,.85)';
           el.style.background = 'rgba(201,169,110,.10)';
-        } else {
-          el.style.opacity = '0.05';
-          el.style.transform = 'scale(0.985)';
-          el.style.pointerEvents = 'none';
         }
       });
-      activityTimeout(token, () => showDecBodyMap(), 240);
+      activityTimeout(token, () => showDecBodyMap(), 260);
     };
-
-    o.addEventListener('click', go, { passive: true });
+    o.addEventListener('click', go);
+    o.addEventListener('touchend', e => { e.preventDefault(); go(); });
     grid.appendChild(o);
-  });
-
-  activityFrame(token, () => {
-    if (!grid || !isCurrentActivity(token)) return;
-    grid.style.opacity = '1';
-    grid.style.transform = 'translateY(0)';
   });
 }
 
@@ -3940,15 +3918,16 @@ function showBodyMap(mode, payload) {
     if (scr) { scr.style.paddingTop = '0'; scr.style.gap = '0'; }
     // Fade witness screen out, then inject body map
     if (scr) { scr.style.transition = 'opacity 0.5s ease'; scr.style.opacity = '0'; }
-    setTimeout(() => {
-      grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 1.0s ease;"></div>';
+    activityTimeout(token, () => {
+      if (!isCurrentActivity(token)) return;
+      grid.innerHTML = '<div id="bodymapWrap" style="position:fixed;inset:0;z-index:10;background:var(--bg);opacity:0;transition:opacity 0.45s ease;"></div>';
       wrap = document.getElementById('bodymapWrap');
       if (scr) { scr.style.opacity = '1'; scr.style.transition = 'none'; }
       const mainCv = document.getElementById('cv');
       if (mainCv) mainCv.style.opacity = '0';
-      setTimeout(() => { if (wrap) wrap.style.opacity = '1'; }, 60);
+      activityFrame(token, () => { if (wrap && isCurrentActivity(token)) wrap.style.opacity = '1'; });
       buildDecohere();
-    }, 520);
+    }, 220);
   } else {
     // Collapse: use dedicated s-bodymap screen
     const screen = document.getElementById('s-bodymap');
@@ -5190,7 +5169,7 @@ function startDissolutionChamber() {
   const _bmw = document.getElementById('bodymapWrap');
   if (_bmw && _bmw.parentNode) _bmw.parentNode.removeChild(_bmw);
   showBackBtn();
-  document.getElementById('backBtn').onclick = () => startDecohere();
+  document.getElementById('backBtn').onclick = () => goHome();
 
   const shadowName = lang === 'en' ? decStateName : decStateNameES;
   const zoneName   = decBodySpot || 'body';
@@ -5438,7 +5417,7 @@ function startDecAcknowledge() {
 
   // Ensure back button stays visible
   showBackBtn();
-  document.getElementById('backBtn').onclick = () => startDecohere();
+  document.getElementById('backBtn').onclick = () => goHome();
 
   showScreen('s-dec-breath', () => {
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -5514,7 +5493,7 @@ function startDecBreath(displayName) {
   if (wordOrb) { wordOrb.style.display = 'none'; }
   if (bdots) { bdots.style.top = 'auto'; bdots.style.bottom = 'clamp(80px,14vh,120px)'; }
   const backBtn = document.getElementById('backBtn');
-  if (backBtn) { backBtn.style.opacity='1'; backBtn.style.pointerEvents='all'; backBtn.onclick = () => startDecohere(); }
+  if (backBtn) { backBtn.style.opacity='1'; backBtn.style.pointerEvents='all'; backBtn.onclick = () => goHome(); }
 
   const decOrb = new BreathOrb(innerWidth * 0.5, innerHeight * 0.5, 'violet');
   decOrb.maxCycles = 3;
