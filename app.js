@@ -48,7 +48,6 @@ function clearActivityFrames() {
 function nextActivityToken() {
   activityToken += 1;
   clearActivityFrames();
-  clearActivityTimers();
   return activityToken;
 }
 function isCurrentActivity(token) {
@@ -61,32 +60,6 @@ function activityFrame(token, fn) {
     try { fn(); } catch(e) {}
   });
   activityFrameIds.add(id);
-  return id;
-}
-
-let activityTimeoutIds = new Set();
-let activityIntervalIds = new Set();
-function clearActivityTimers() {
-  activityTimeoutIds.forEach(id => { try { clearTimeout(id); } catch(e) {} });
-  activityIntervalIds.forEach(id => { try { clearInterval(id); } catch(e) {} });
-  activityTimeoutIds.clear();
-  activityIntervalIds.clear();
-}
-function activityTimeout(token, fn, delay) {
-  const id = setTimeout(() => {
-    activityTimeoutIds.delete(id);
-    if (!isCurrentActivity(token)) return;
-    try { fn(); } catch(e) {}
-  }, delay);
-  activityTimeoutIds.add(id);
-  return id;
-}
-function activityInterval(token, fn, delay) {
-  const id = setInterval(() => {
-    if (!isCurrentActivity(token)) return;
-    try { fn(); } catch(e) {}
-  }, delay);
-  activityIntervalIds.add(id);
   return id;
 }
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
@@ -3762,153 +3735,100 @@ function getDecBodyPos(spot) {
   };
 }
 
-
 function startDecohere() {
   const witnessToken = nextActivityToken();
   if (navigator.vibrate) navigator.vibrate(18);
   initAudio();
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
   playDecohereSignature();
-  currentMode = 'witness';
-  showBackBtn();
-  const backBtn = document.getElementById('backBtn');
-  if (backBtn) backBtn.onclick = () => goHome();
-
+  currentMode = 'witness'; showBackBtn();
+  document.getElementById('backBtn').onclick = () => goHome();
   clearGhosts();
+  // Violet colour temperature for Witness movement
   applyDecoherePalette();
-  fadeDrone(true, 1.5);
-  spParticles = [];
-
+  fadeDrone(true, 1.5); spParticles = [];
+  setTimeout(() => {
+    if (!isCurrentActivity(witnessToken)) return;
+    initSpParticles(10);
+    spParticles.forEach(p => {
+      p.targetAlpha = 0.18 + Math.random()*0.15;
+      p.targetClarity = 0;
+      p.phV *= 0.4;
+    });
+  }, 300);
+  buildShadowGrid();
   const t = TRANSLATIONS[lang];
   const scr = document.getElementById('s-witness');
-  const grid = document.getElementById('shadowGrid');
+  if (scr) { scr.style.paddingTop = ''; scr.style.gap = ''; }
   const arrLine = document.getElementById('decArrivalLine');
   const arrSub  = document.getElementById('decArrivalSub');
+  // Set content but keep hidden — fade in after screen transition to prevent double-render jump
+  arrLine.textContent = t.decArrivalLine;
+  arrSub.textContent  = t.decArrivalSub;
+  arrLine.style.transition = 'none'; arrLine.style.opacity = '0';
+  arrSub.style.transition  = 'none'; arrSub.style.opacity  = '0';
   const tapHint = document.getElementById('decTapHint');
-
-  if (scr) {
-    scr.style.paddingTop = '';
-    scr.style.gap = '';
-  }
-  if (grid) {
-    grid.innerHTML = '';
-    grid.style.opacity = '0';
-    grid.style.transform = 'translateY(10px)';
-    grid.style.transition = 'none';
-  }
-  if (arrLine) {
-    arrLine.textContent = t.decArrivalLine;
-    arrLine.style.opacity = '0';
-    arrLine.style.transform = 'translateY(8px)';
-    arrLine.style.transition = 'none';
-  }
-  if (arrSub) {
-    arrSub.textContent = t.decArrivalSub;
-    arrSub.style.opacity = '0';
-    arrSub.style.transform = 'translateY(8px)';
-    arrSub.style.transition = 'none';
-  }
   if (tapHint) tapHint.textContent = '';
-
   showScreen('s-witness', () => {
     if (!isCurrentActivity(witnessToken)) return;
-
-    activityTimeout(witnessToken, () => {
-      initSpParticles(10);
-      spParticles.forEach(p => {
-        p.targetAlpha = 0.18 + Math.random() * 0.15;
-        p.targetClarity = 0;
-        p.phV *= 0.4;
-      });
-    }, 180);
-
     activityFrame(witnessToken, () => {
-      if (arrLine) arrLine.style.transition = 'opacity .55s ease, transform .55s ease';
-      if (arrSub)  arrSub.style.transition  = 'opacity .55s ease, transform .55s ease';
-      if (arrLine) {
-        arrLine.style.opacity = '1';
-        arrLine.style.transform = 'translateY(0)';
-      }
-      activityTimeout(witnessToken, () => {
-        if (arrSub) {
-          arrSub.style.opacity = '1';
-          arrSub.style.transform = 'translateY(0)';
-        }
-      }, 120);
-      activityTimeout(witnessToken, () => buildShadowGrid(witnessToken), 220);
+      arrLine.style.transition = 'opacity 0.45s ease';
+      arrSub.style.transition  = 'opacity 0.45s ease';
+      arrLine.style.opacity = '1';
+      arrSub.style.opacity  = '1';
     });
   });
 }
 
-
-
-function buildShadowGrid(token = activityToken) {
+function buildShadowGrid() {
+  const token = activityToken;
   const grid = document.getElementById('shadowGrid');
-  if (!grid) return;
-
-  const en = SHADOW_STATES.en;
-  const es = SHADOW_STATES.es;
-  let selected = false;
-
   grid.innerHTML = '';
-  grid.style.cssText =
-    'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
+  grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
     'align-content:center;justify-content:center;gap:clamp(8px,2.5vw,16px);' +
-    'padding:0 clamp(16px,5vw,32px);' +
-    'opacity:0;transform:translateY(10px);transition:opacity .45s ease, transform .45s ease;';
+    'padding:0 clamp(16px,5vw,32px);';
+
+  const en = SHADOW_STATES.en, es = SHADOW_STATES.es;
+
+  grid.style.opacity = '0';
+  grid.style.transition = 'opacity 0.35s ease';
+  activityFrame(token, () => { if (grid && isCurrentActivity(token)) grid.style.opacity = '1'; });
 
   en.forEach((name, i) => {
     const displayName = lang === 'en' ? name : es[i];
+
     const o = document.createElement('button');
     o.className = 'shadow-orb';
-    const dur = (2.4 + Math.random() * 1.2).toFixed(2);
-    const delay = (Math.random() * -2).toFixed(2);
+    o.style.opacity = '0';
+    // Individual vibration — random duration and delay so each word moves independently
+    const dur = (2.2 + Math.random() * 1.8).toFixed(2);
+    const delay = (Math.random() * -3).toFixed(2);
     o.style.animationDuration = dur + 's';
     o.style.animationDelay = delay + 's';
-    o.style.opacity = '1';
-    o.style.transition = 'opacity .28s ease, color .28s ease, border-color .28s ease, background .28s ease, transform .28s ease';
+    o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
     o.textContent = displayName;
 
-    const go = (e) => {
-      if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      if (selected || !isCurrentActivity(token)) return;
-      selected = true;
-      if (audioCtx) playTap();
-      decStateName = name;
-      decStateNameES = es[i];
+    o.style.opacity = '1';
 
+    const go = () => {
+      if (audioCtx) playTap();
+      decStateName = name; decStateNameES = es[i];
       grid.querySelectorAll('.shadow-orb').forEach(el => {
-        el.style.pointerEvents = 'none';
+        el.style.transition = 'opacity 0.5s ease, color 0.5s ease, border-color 0.5s ease';
+        el.style.opacity = el === o ? '1' : '0.06';
         if (el === o) {
-          el.style.opacity = '1';
-          el.style.transform = 'scale(1.02)';
           el.style.color = 'rgba(240,204,136,1)';
           el.style.borderColor = 'rgba(201,169,110,.85)';
           el.style.background = 'rgba(201,169,110,.10)';
-        } else {
-          el.style.opacity = '0.08';
-          el.style.transform = 'scale(0.985)';
         }
       });
-
       activityTimeout(token, () => showDecBodyMap(), 260);
     };
-
-    o.addEventListener('click', go, { passive: false });
-    o.addEventListener('touchend', go, { passive: false });
+    o.addEventListener('click', go);
+    o.addEventListener('touchend', e => { e.preventDefault(); go(); });
     grid.appendChild(o);
   });
-
-  activityFrame(token, () => {
-    if (!isCurrentActivity(token)) return;
-    grid.style.opacity = '1';
-    grid.style.transform = 'translateY(0)';
-  });
 }
-
 
 // ══════════════════════════════════════
 // SHARED BODY MAP — used by both Decohere and Collapse
@@ -4058,16 +3978,16 @@ function showBodyMap(mode, payload) {
     wrap.appendChild(fc);
     const fx = fc.getContext('2d');
 
-    // Figure layout — enlarged for iPhone Pro Max while keeping the lower prompt area clear
-    const FIG_TOP = 0.03, FIG_BOT = 0.86;
-    const FIG_L = 0.20, FIG_R = 0.80;
+    // Figure layout
+    const FIG_TOP = 0.08, FIG_BOT = 0.88;
+    const FIG_L = 0.28, FIG_R = 0.72;
     const figH = (FIG_BOT - FIG_TOP) * H;
     const figW = (FIG_R - FIG_L) * W;
     const figX = FIG_L * W, figY = FIG_TOP * H;
 
     // Shadow word watermark — very faint behind figure
     const watermarkEl = document.createElement('div');
-    watermarkEl.style.cssText = `position:absolute;left:50%;top:44%;
+    watermarkEl.style.cssText = `position:absolute;left:50%;top:46%;
       transform:translate(-50%,-50%);
       font-size:clamp(38px,11vw,72px);font-weight:300;
       font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;
@@ -4090,21 +4010,17 @@ function showBodyMap(mode, payload) {
     ceremonyEl.textContent = decStateName || '';
     wrap.appendChild(ceremonyEl);
 
-    // Zone definitions
-    const SPOT_BANDS_Y = {
-      head:    [0.00, 0.18],
-      throat:  [0.13, 0.24],
-      chest:   [0.20, 0.42],
-      stomach: [0.40, 0.54],
-      pelvis:  [0.52, 0.72],
-    };
+    // Witness zone map — tuned to the larger figure so taps line up more closely
+    // with visible body regions on tall iPhone screens.
     const ZONES = [
-      { key:'head',    centerY: 0.09 },
-      { key:'throat',  centerY: 0.19 },
-      { key:'chest',   centerY: 0.31 },
-      { key:'stomach', centerY: 0.47 },
-      { key:'pelvis',  centerY: 0.62 },
+      { key:'head',    centerY:0.085, band:[0.00,0.165], left:0.39, right:0.61 },
+      { key:'neck',    centerY:0.182, band:[0.165,0.225], left:0.45, right:0.55 },
+      { key:'chest',   centerY:0.305, band:[0.225,0.390], left:0.30, right:0.70 },
+      { key:'solar',   centerY:0.435, band:[0.390,0.505], left:0.32, right:0.68 },
+      { key:'stomach', centerY:0.555, band:[0.505,0.625], left:0.34, right:0.66 },
+      { key:'groin',   centerY:0.655, band:[0.625,0.715], left:0.44, right:0.56 },
     ];
+    const SPOT_BANDS_Y = Object.fromEntries(ZONES.map(z => [z.key, z.band]));
 
     // Human silhouette — path-based outline, much more legible
     // All coordinates in normalised [0..1] space relative to figX/figY/figW/figH
@@ -4248,19 +4164,20 @@ function showBodyMap(mode, payload) {
     }
     figRafId = requestAnimationFrame(drawFigure);
 
-    // Invisible hit zones — no visible labels, trust the body
+    // Invisible hit zones — sized to the visible body rather than the full figure box.
     ZONES.forEach((z) => {
-      const [lo, hi] = SPOT_BANDS_Y[z.key];
+      const [lo, hi] = z.band;
       const hitTop = figY + lo * figH;
       const hitH2  = (hi - lo) * figH;
-      const hitL   = figX - figW * 0.12;
-      const hitW   = figW * 1.24;
+      const hitL   = figX + z.left * figW;
+      const hitW   = (z.right - z.left) * figW;
 
       const hitBtn = document.createElement('button');
+      hitBtn.setAttribute('aria-label', z.key);
       hitBtn.style.cssText = `position:absolute;left:${hitL}px;top:${hitTop}px;
         width:${hitW}px;height:${hitH2}px;
         background:none;border:none;cursor:pointer;z-index:3;
-        -webkit-tap-highlight-color:transparent;`;
+        -webkit-tap-highlight-color:transparent;touch-action:manipulation;`;
 
       hitBtn.addEventListener('click', () => {
         if (somatic) return;
@@ -4275,7 +4192,7 @@ function showBodyMap(mode, payload) {
 
         // Zone tone + overtone
         if (audioCtx) {
-          const zoneFreqs = { head:1056, throat:792, chest:528, stomach:396, pelvis:264 };
+          const zoneFreqs = { head:1056, neck:792, chest:528, solar:417, stomach:396, groin:264, throat:792, pelvis:264 };
           const f = zoneFreqs[z.key] || 528;
           const oz = audioCtx.createOscillator(), gz = audioCtx.createGain();
           oz.type='sine'; oz.frequency.value=f;
@@ -4302,13 +4219,12 @@ function showBodyMap(mode, payload) {
         qEl.style.opacity = '0';
 
         // After 2.2s — figure dissolves, transition
-        activityTimeout(token, () => {
+        setTimeout(() => {
           ceremonyEl.style.transition = 'opacity 1.4s ease, color 1s ease, text-shadow 1s ease';
           ceremonyEl.style.opacity = '0';
           fc.style.opacity = '0'; // canvas fades = body-to-orb dissolve
 
-          activityTimeout(token, () => {
-            if (!isCurrentActivity(token)) return;
+          setTimeout(() => {
             cancelAnimationFrame(figRafId);
             decBodySpot = z.key;
             const mainCv = document.getElementById('cv');
@@ -4316,12 +4232,12 @@ function showBodyMap(mode, payload) {
 
             // Tone picker — pleasant / unpleasant / neutral
             showTonePicker(wrap, (toneKey) => {
-              if (!isCurrentActivity(token)) return;
               decSomaticTone = toneKey;
               decSomaticSpoken = ''; // reset for new session
+              // Log the somatic data
               logSession({ type: 'somatic', shadow: decStateName, zone: z.key, tone: toneKey, ts: Date.now() });
+              // Voice sensing layer — speak into the zone before chamber
               showVoiceSensingLayer(wrap, z.key, decStateName, toneKey, (spokenText) => {
-                if (!isCurrentActivity(token)) return;
                 if (spokenText) decSomaticSpoken = spokenText;
                 const apiKey = lsGet('field_api_key');
                 if (apiKey) { startDissolutionChamber(); } else { startDecAcknowledge(); }
@@ -4399,7 +4315,7 @@ function showBodyMap(mode, payload) {
       document.querySelectorAll('.body-node').forEach(x => x.classList.remove('active'));
       b.classList.add('active');
       if (audioCtx) {
-        const zoneFreqs = { head:1056, throat:792, chest:528, stomach:396, pelvis:264 };
+        const zoneFreqs = { head:1056, neck:792, chest:528, solar:417, stomach:396, groin:264, throat:792, pelvis:264 };
         const f = zoneFreqs[spot.key] || 528;
         const oz = audioCtx.createOscillator(), gz = audioCtx.createGain();
         oz.type='sine'; oz.frequency.value=f;
@@ -4562,8 +4478,8 @@ function showVoiceSensingLayer(container, zoneKey, shadowWord, toneKey, onComple
 
   const t = lang === 'en';
   const zoneLabels = {
-    en: { head:'head', throat:'throat', chest:'chest', stomach:'stomach', pelvis:'pelvis' },
-    es: { head:'cabeza', throat:'garganta', chest:'pecho', stomach:'vientre', pelvis:'pelvis' }
+    en: { head:'head', neck:'neck', chest:'chest', solar:'solar plexus', stomach:'stomach', groin:'groin', throat:'throat', pelvis:'pelvis' },
+    es: { head:'cabeza', neck:'cuello', chest:'pecho', solar:'plexo solar', stomach:'vientre', groin:'ingle', throat:'garganta', pelvis:'pelvis' }
   };
   const zoneLabel = zoneLabels[lang][zoneKey] || zoneKey;
 
