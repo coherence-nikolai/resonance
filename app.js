@@ -48,6 +48,7 @@ function clearActivityFrames() {
 function nextActivityToken() {
   activityToken += 1;
   clearActivityFrames();
+  clearActivityTimers();
   return activityToken;
 }
 function isCurrentActivity(token) {
@@ -60,6 +61,32 @@ function activityFrame(token, fn) {
     try { fn(); } catch(e) {}
   });
   activityFrameIds.add(id);
+  return id;
+}
+
+let activityTimeoutIds = new Set();
+let activityIntervalIds = new Set();
+function clearActivityTimers() {
+  activityTimeoutIds.forEach(id => { try { clearTimeout(id); } catch(e) {} });
+  activityIntervalIds.forEach(id => { try { clearInterval(id); } catch(e) {} });
+  activityTimeoutIds.clear();
+  activityIntervalIds.clear();
+}
+function activityTimeout(token, fn, delay) {
+  const id = setTimeout(() => {
+    activityTimeoutIds.delete(id);
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) {}
+  }, delay);
+  activityTimeoutIds.add(id);
+  return id;
+}
+function activityInterval(token, fn, delay) {
+  const id = setInterval(() => {
+    if (!isCurrentActivity(token)) return;
+    try { fn(); } catch(e) {}
+  }, delay);
+  activityIntervalIds.add(id);
   return id;
 }
 let totalObs = (() => { try { return parseInt(lsGet('field_obs') || '0'); } catch(e) { return 0; } })();
@@ -3735,100 +3762,153 @@ function getDecBodyPos(spot) {
   };
 }
 
+
 function startDecohere() {
   const witnessToken = nextActivityToken();
   if (navigator.vibrate) navigator.vibrate(18);
   initAudio();
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
   playDecohereSignature();
-  currentMode = 'witness'; showBackBtn();
-  document.getElementById('backBtn').onclick = () => goHome();
+  currentMode = 'witness';
+  showBackBtn();
+  const backBtn = document.getElementById('backBtn');
+  if (backBtn) backBtn.onclick = () => goHome();
+
   clearGhosts();
-  // Violet colour temperature for Witness movement
   applyDecoherePalette();
-  fadeDrone(true, 1.5); spParticles = [];
-  setTimeout(() => {
-    if (!isCurrentActivity(witnessToken)) return;
-    initSpParticles(10);
-    spParticles.forEach(p => {
-      p.targetAlpha = 0.18 + Math.random()*0.15;
-      p.targetClarity = 0;
-      p.phV *= 0.4;
-    });
-  }, 300);
-  buildShadowGrid();
+  fadeDrone(true, 1.5);
+  spParticles = [];
+
   const t = TRANSLATIONS[lang];
   const scr = document.getElementById('s-witness');
-  if (scr) { scr.style.paddingTop = ''; scr.style.gap = ''; }
+  const grid = document.getElementById('shadowGrid');
   const arrLine = document.getElementById('decArrivalLine');
   const arrSub  = document.getElementById('decArrivalSub');
-  // Set content but keep hidden — fade in after screen transition to prevent double-render jump
-  arrLine.textContent = t.decArrivalLine;
-  arrSub.textContent  = t.decArrivalSub;
-  arrLine.style.transition = 'none'; arrLine.style.opacity = '0';
-  arrSub.style.transition  = 'none'; arrSub.style.opacity  = '0';
   const tapHint = document.getElementById('decTapHint');
+
+  if (scr) {
+    scr.style.paddingTop = '';
+    scr.style.gap = '';
+  }
+  if (grid) {
+    grid.innerHTML = '';
+    grid.style.opacity = '0';
+    grid.style.transform = 'translateY(10px)';
+    grid.style.transition = 'none';
+  }
+  if (arrLine) {
+    arrLine.textContent = t.decArrivalLine;
+    arrLine.style.opacity = '0';
+    arrLine.style.transform = 'translateY(8px)';
+    arrLine.style.transition = 'none';
+  }
+  if (arrSub) {
+    arrSub.textContent = t.decArrivalSub;
+    arrSub.style.opacity = '0';
+    arrSub.style.transform = 'translateY(8px)';
+    arrSub.style.transition = 'none';
+  }
   if (tapHint) tapHint.textContent = '';
+
   showScreen('s-witness', () => {
     if (!isCurrentActivity(witnessToken)) return;
+
+    activityTimeout(witnessToken, () => {
+      initSpParticles(10);
+      spParticles.forEach(p => {
+        p.targetAlpha = 0.18 + Math.random() * 0.15;
+        p.targetClarity = 0;
+        p.phV *= 0.4;
+      });
+    }, 180);
+
     activityFrame(witnessToken, () => {
-      arrLine.style.transition = 'opacity 0.45s ease';
-      arrSub.style.transition  = 'opacity 0.45s ease';
-      arrLine.style.opacity = '1';
-      arrSub.style.opacity  = '1';
+      if (arrLine) arrLine.style.transition = 'opacity .55s ease, transform .55s ease';
+      if (arrSub)  arrSub.style.transition  = 'opacity .55s ease, transform .55s ease';
+      if (arrLine) {
+        arrLine.style.opacity = '1';
+        arrLine.style.transform = 'translateY(0)';
+      }
+      activityTimeout(witnessToken, () => {
+        if (arrSub) {
+          arrSub.style.opacity = '1';
+          arrSub.style.transform = 'translateY(0)';
+        }
+      }, 120);
+      activityTimeout(witnessToken, () => buildShadowGrid(witnessToken), 220);
     });
   });
 }
 
-function buildShadowGrid() {
-  const token = activityToken;
+
+
+function buildShadowGrid(token = activityToken) {
   const grid = document.getElementById('shadowGrid');
+  if (!grid) return;
+
+  const en = SHADOW_STATES.en;
+  const es = SHADOW_STATES.es;
+  let selected = false;
+
   grid.innerHTML = '';
-  grid.style.cssText = 'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
+  grid.style.cssText =
+    'width:100%;flex:1;min-height:0;display:flex;flex-wrap:wrap;' +
     'align-content:center;justify-content:center;gap:clamp(8px,2.5vw,16px);' +
-    'padding:0 clamp(16px,5vw,32px);';
-
-  const en = SHADOW_STATES.en, es = SHADOW_STATES.es;
-
-  grid.style.opacity = '0';
-  grid.style.transition = 'opacity 0.35s ease';
-  activityFrame(token, () => { if (grid && isCurrentActivity(token)) grid.style.opacity = '1'; });
+    'padding:0 clamp(16px,5vw,32px);' +
+    'opacity:0;transform:translateY(10px);transition:opacity .45s ease, transform .45s ease;';
 
   en.forEach((name, i) => {
     const displayName = lang === 'en' ? name : es[i];
-
     const o = document.createElement('button');
     o.className = 'shadow-orb';
-    o.style.opacity = '0';
-    // Individual vibration — random duration and delay so each word moves independently
-    const dur = (2.2 + Math.random() * 1.8).toFixed(2);
-    const delay = (Math.random() * -3).toFixed(2);
+    const dur = (2.4 + Math.random() * 1.2).toFixed(2);
+    const delay = (Math.random() * -2).toFixed(2);
     o.style.animationDuration = dur + 's';
     o.style.animationDelay = delay + 's';
-    o.style.transition = 'opacity 1.2s ease, color .3s ease, border-color .3s ease, background .3s ease';
+    o.style.opacity = '1';
+    o.style.transition = 'opacity .28s ease, color .28s ease, border-color .28s ease, background .28s ease, transform .28s ease';
     o.textContent = displayName;
 
-    o.style.opacity = '1';
-
-    const go = () => {
+    const go = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (selected || !isCurrentActivity(token)) return;
+      selected = true;
       if (audioCtx) playTap();
-      decStateName = name; decStateNameES = es[i];
+      decStateName = name;
+      decStateNameES = es[i];
+
       grid.querySelectorAll('.shadow-orb').forEach(el => {
-        el.style.transition = 'opacity 0.5s ease, color 0.5s ease, border-color 0.5s ease';
-        el.style.opacity = el === o ? '1' : '0.06';
+        el.style.pointerEvents = 'none';
         if (el === o) {
+          el.style.opacity = '1';
+          el.style.transform = 'scale(1.02)';
           el.style.color = 'rgba(240,204,136,1)';
           el.style.borderColor = 'rgba(201,169,110,.85)';
           el.style.background = 'rgba(201,169,110,.10)';
+        } else {
+          el.style.opacity = '0.08';
+          el.style.transform = 'scale(0.985)';
         }
       });
+
       activityTimeout(token, () => showDecBodyMap(), 260);
     };
-    o.addEventListener('click', go);
-    o.addEventListener('touchend', e => { e.preventDefault(); go(); });
+
+    o.addEventListener('click', go, { passive: false });
+    o.addEventListener('touchend', go, { passive: false });
     grid.appendChild(o);
   });
+
+  activityFrame(token, () => {
+    if (!isCurrentActivity(token)) return;
+    grid.style.opacity = '1';
+    grid.style.transform = 'translateY(0)';
+  });
 }
+
 
 // ══════════════════════════════════════
 // SHARED BODY MAP — used by both Decohere and Collapse
@@ -4222,12 +4302,13 @@ function showBodyMap(mode, payload) {
         qEl.style.opacity = '0';
 
         // After 2.2s — figure dissolves, transition
-        setTimeout(() => {
+        activityTimeout(token, () => {
           ceremonyEl.style.transition = 'opacity 1.4s ease, color 1s ease, text-shadow 1s ease';
           ceremonyEl.style.opacity = '0';
           fc.style.opacity = '0'; // canvas fades = body-to-orb dissolve
 
-          setTimeout(() => {
+          activityTimeout(token, () => {
+            if (!isCurrentActivity(token)) return;
             cancelAnimationFrame(figRafId);
             decBodySpot = z.key;
             const mainCv = document.getElementById('cv');
@@ -4235,12 +4316,12 @@ function showBodyMap(mode, payload) {
 
             // Tone picker — pleasant / unpleasant / neutral
             showTonePicker(wrap, (toneKey) => {
+              if (!isCurrentActivity(token)) return;
               decSomaticTone = toneKey;
               decSomaticSpoken = ''; // reset for new session
-              // Log the somatic data
               logSession({ type: 'somatic', shadow: decStateName, zone: z.key, tone: toneKey, ts: Date.now() });
-              // Voice sensing layer — speak into the zone before chamber
               showVoiceSensingLayer(wrap, z.key, decStateName, toneKey, (spokenText) => {
+                if (!isCurrentActivity(token)) return;
                 if (spokenText) decSomaticSpoken = spokenText;
                 const apiKey = lsGet('field_api_key');
                 if (apiKey) { startDissolutionChamber(); } else { startDecAcknowledge(); }
@@ -5169,7 +5250,7 @@ function startDissolutionChamber() {
   const _bmw = document.getElementById('bodymapWrap');
   if (_bmw && _bmw.parentNode) _bmw.parentNode.removeChild(_bmw);
   showBackBtn();
-  document.getElementById('backBtn').onclick = () => goHome();
+  document.getElementById('backBtn').onclick = () => startDecohere();
 
   const shadowName = lang === 'en' ? decStateName : decStateNameES;
   const zoneName   = decBodySpot || 'body';
@@ -5417,7 +5498,7 @@ function startDecAcknowledge() {
 
   // Ensure back button stays visible
   showBackBtn();
-  document.getElementById('backBtn').onclick = () => goHome();
+  document.getElementById('backBtn').onclick = () => startDecohere();
 
   showScreen('s-dec-breath', () => {
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -5493,7 +5574,7 @@ function startDecBreath(displayName) {
   if (wordOrb) { wordOrb.style.display = 'none'; }
   if (bdots) { bdots.style.top = 'auto'; bdots.style.bottom = 'clamp(80px,14vh,120px)'; }
   const backBtn = document.getElementById('backBtn');
-  if (backBtn) { backBtn.style.opacity='1'; backBtn.style.pointerEvents='all'; backBtn.onclick = () => goHome(); }
+  if (backBtn) { backBtn.style.opacity='1'; backBtn.style.pointerEvents='all'; backBtn.onclick = () => startDecohere(); }
 
   const decOrb = new BreathOrb(innerWidth * 0.5, innerHeight * 0.5, 'violet');
   decOrb.maxCycles = 3;
