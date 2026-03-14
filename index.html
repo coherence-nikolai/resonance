@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#080610">
-<title>Field</title>
+<title>Resonance</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet">
@@ -286,6 +286,48 @@ b, strong { font-weight: 400; }
   50%     { transform: translateX(-50%) translateY(-6px); }
 }
 
+/* ── INTRO ANIMATION ── */
+#s-intro {
+  padding: 0;
+  background: var(--bg);
+}
+.intro-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+}
+.intro-skip {
+  position: absolute;
+  bottom: clamp(40px,10vw,60px);
+  left: 50%; transform: translateX(-50%);
+  font-family: var(--sans);
+  font-size: clamp(12px,3vw,15px);
+  letter-spacing: .22em;
+  color: rgba(237,224,212,.22);
+  text-transform: lowercase;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.intro-skip.visible { opacity: 1; pointer-events: all; cursor: pointer; }
+
+/* Revisit glyph on home screen */
+.intro-glyph {
+  position: absolute;
+  top: calc(var(--wave-top) + 8px);
+  right: 60px;
+  font-size: 18px;
+  color: rgba(200,130,110,.25);
+  background: none; border: none;
+  cursor: pointer;
+  padding: 8px;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .4s ease;
+  font-family: var(--sans);
+  z-index: 20;
+}
+.intro-glyph:hover { color: rgba(200,130,110,.55); }
+
 /* ── HOME SCREEN ── */
 #s-home {
   justify-content: center;
@@ -294,9 +336,9 @@ b, strong { font-weight: 400; }
 
 .field-wordmark {
   font-family: var(--serif);
-  font-size: clamp(52px,14vw,76px);
+  font-size: clamp(36px,10vw,58px);
   font-weight: 300;
-  letter-spacing: .22em;
+  letter-spacing: .18em;
   color: var(--rose);
   line-height: 1;
   margin-bottom: clamp(48px,12vw,72px);
@@ -1030,7 +1072,7 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
 <div id="settings-backdrop" onclick="closeSettings()"></div>
 
 <div id="settings-panel">
-  <div class="settings-wordmark">Field · Settings</div>
+  <div class="settings-wordmark">Resonance · Settings</div>
   <div class="settings-section">
     <div class="settings-label">Anthropic API Key</div>
     <div class="settings-row">
@@ -1072,9 +1114,16 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
   <button class="chrome-btn" id="settingsBtn" onclick="toggleSettings()">⚙</button>
 </div>
 
+<!-- INTRO ANIMATION SCREEN -->
+<div class="screen" id="s-intro">
+  <canvas class="intro-canvas" id="introCanvas"></canvas>
+  <div class="intro-skip" id="introSkip">tap to enter</div>
+</div>
+
 <!-- HOME -->
 <div class="screen active" id="s-home">
-  <div class="field-wordmark">Field</div>
+  <div class="field-wordmark">Resonance</div>
+  <button class="intro-glyph" id="introGlyph" onclick="playIntroAnimation()" title="what is this?">∿</button>
 
   <button class="home-enter-btn" id="homeEnterBtn" onclick="startNotice()" ontouchend="this._t=1" onmousedown="this._t=1">
     <span class="home-enter-question" id="homeArrival">What are you holding right now?</span>

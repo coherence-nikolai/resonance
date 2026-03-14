@@ -355,9 +355,9 @@ class BreathOrb {
       }
 
     } else if (this.phase === 'rest') {
-      // Gentle target — don't snap, let easing carry it
-      tR = this.dispRadius * 0.92 + 12 * 0.08; // ease toward 12 softly
-      tB = 0; tG = 1.2;
+      tR = this.dispRadius * 0.88 + 11 * 0.12;
+      tB = this.dispBlur * 0.85;
+      tG = 1.1;
       if (t > this.REST) this.startPhase('inhale');
 
     } else if (this.phase === 'crystallised') {
@@ -543,8 +543,32 @@ function resumeAudio() {
 document.addEventListener('touchstart', resumeAudio, {passive:true, capture:true});
 document.addEventListener('click',      resumeAudio, {passive:true, capture:true});
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) resumeAudio();
-  else if (audioCtx && audioCtx.state !== 'closed') audioCtx.suspend().catch(() => {});
+  if (!document.hidden) {
+    resumeAudio();
+    // Safari iOS: if context was killed, restart drone
+    setTimeout(() => {
+      if (audioEnabled && (!audioCtx || audioCtx.state === 'closed')) {
+        audioCtx = null; droneNodes = []; tryDrone();
+      } else if (audioEnabled && audioCtx && audioCtx.state !== 'closed' && !droneNodes.length) {
+        tryDrone();
+      }
+    }, 400);
+  } else if (audioCtx && audioCtx.state !== 'closed') {
+    audioCtx.suspend().catch(() => {});
+  }
+});
+// Safari: pageshow fires when returning from background/bfcache
+window.addEventListener('pageshow', () => {
+  resumeAudio();
+  setTimeout(() => {
+    if (audioEnabled && droneNodes.length === 0) tryDrone();
+  }, 600);
+});
+window.addEventListener('focus', () => {
+  resumeAudio();
+  setTimeout(() => {
+    if (audioEnabled && droneNodes.length === 0) tryDrone();
+  }, 400);
 });
 
 function tryDrone() {
@@ -634,6 +658,23 @@ const playNoticeSound    = () => playPhaseSwell(396);  // releasing fear
 const playHoldSound      = () => playPhaseSwell(432);  // grounding
 const playAnchorSound    = () => playPhaseSwell(528);  // transformation
 const playIntegrateSound = () => playPhaseSwell(639);  // connection
+
+// Soft continue tap — warm brief acknowledgement, not UI click
+function playContinueTone() {
+  if (!audioEnabled || !audioCtx) return;
+  try {
+    [[528,0.016],[660,0.010]].forEach(([f,g],i) => {
+      const o=audioCtx.createOscillator(), gn=audioCtx.createGain();
+      const lp=audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1100;
+      o.type='sine'; o.frequency.value=f;
+      const t0=audioCtx.currentTime+i*0.05;
+      gn.gain.setValueAtTime(0,t0); gn.gain.linearRampToValueAtTime(g,t0+0.09);
+      gn.gain.exponentialRampToValueAtTime(0.0001,t0+1.1);
+      o.connect(lp); lp.connect(gn); gn.connect(audioCtx.destination);
+      o.start(t0); o.stop(t0+1.3);
+    });
+  } catch(e) {}
+}
 
 // Breath tones — binaural-style beating between left/right harmonics
 function playBreathInhale() {
@@ -1054,6 +1095,7 @@ async function fetchNoticeReflection(tok) {
 }
 
 function advanceToHold() {
+  playContinueTone();
   if (audioCtx) playHoldSound();
   launchHold();
 }
@@ -1096,6 +1138,7 @@ async function fetchHoldReflection(tok) {
 }
 
 function advanceToAnchor() {
+  playContinueTone();
   if (audioCtx) playAnchorSound();
   launchAnchor();
 }
@@ -1232,6 +1275,7 @@ const FREQ_MAP = {
 };
 
 function advanceToFreq() {
+  playContinueTone();
   const tok = nextToken();
   const t   = TRANSLATIONS[lang];
 
@@ -1273,6 +1317,7 @@ function advanceToFreq() {
 let breathRunning = false;
 
 function startBreath() {
+  playContinueTone();
   const tok = nextToken();
   const t   = TRANSLATIONS[lang];
   clearBreathTimers();
@@ -1384,6 +1429,7 @@ function launchIntegrate() {
   clearBreathTimers();
 
   setWaveState('integrate');
+  triggerWaveConvergence(); // dramatic visual payoff
   setText('pname-integrate', t.integrateLabel.toUpperCase());
 
   // Witnessed sentence — AI generated, falls back to static
@@ -1612,17 +1658,232 @@ function applyDawnPalette() {
   }
 }
 
+// ── INTRO ANIMATION ──
+let introAnimFrame = null;
+let introPlayed = lsGet('f2_intro_played') === '1';
+
+function playIntroAnimation() {
+  const screen = document.getElementById('s-intro');
+  const canvas = document.getElementById('introCanvas');
+  const skip   = document.getElementById('introSkip');
+  if (!screen || !canvas) return;
+
+  if (introAnimFrame) cancelAnimationFrame(introAnimFrame);
+
+  const ic = canvas.getContext('2d');
+  const setSize = () => {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = innerWidth  * dpr;
+    canvas.height = innerHeight * dpr;
+    canvas.style.width  = innerWidth  + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ic.scale(dpr, dpr);
+  };
+  setSize();
+
+  let t = 0;
+  const W = innerWidth, H = innerHeight;
+  const TOTAL = 1500; // frames ~25s at 60fps
+
+  // Two wave objects for intro
+  const iRose   = { phase: 0, phaseV: 0.022, amp: 0.055, y: 0.18, color: '200,130,110', alpha: 0 };
+  const iViolet = { phase: Math.PI*0.6, phaseV: 0.028, amp: 0.050, y: 0.82, color: '152,128,184', alpha: 0 };
+
+  function drawIntroWave(wave) {
+    const centreY = wave.y * H;
+    const amp     = wave.amp * H;
+    ic.save();
+    // corona
+    ic.beginPath();
+    for (let i = 0; i <= W; i += 3) {
+      const p = Math.sin(i*0.0016*(W/380)+wave.phase)*amp + Math.sin(i*0.0034*(W/380)+wave.phase*1.3)*amp*0.3;
+      i===0 ? ic.moveTo(i, centreY+p) : ic.lineTo(i, centreY+p);
+    }
+    ic.strokeStyle = `rgba(${wave.color},${(wave.alpha*0.2).toFixed(3)})`;
+    ic.lineWidth = 22; ic.lineCap = 'round';
+    ic.filter = 'blur(7px)'; ic.stroke(); ic.filter = 'none';
+    // core
+    ic.beginPath();
+    for (let i = 0; i <= W; i += 3) {
+      const p = Math.sin(i*0.0016*(W/380)+wave.phase)*amp + Math.sin(i*0.0034*(W/380)+wave.phase*1.3)*amp*0.3;
+      i===0 ? ic.moveTo(i, centreY+p) : ic.lineTo(i, centreY+p);
+    }
+    ic.strokeStyle = `rgba(${wave.color},${(wave.alpha*0.75).toFixed(3)})`;
+    ic.lineWidth = 2.5; ic.shadowColor = `rgba(${wave.color},0.6)`; ic.shadowBlur = 12;
+    ic.stroke();
+    ic.restore();
+  }
+
+  function introLoop() {
+    ic.clearRect(0, 0, W, H);
+    t++;
+
+    const p = t / TOTAL; // 0→1 over full sequence
+
+    // Phase 1 (0–0.2): rose wave fades in, independent
+    // Phase 2 (0.2–0.4): violet fades in, independent different rhythm
+    // Phase 3 (0.4–0.65): waves slow, begin converging vertically
+    // Phase 4 (0.65–0.85): waves meet at centre, interference glow
+    // Phase 5 (0.85–1.0): standing wave, then gently return
+
+    // Alpha fade in
+    iRose.alpha   = Math.min(1, p / 0.15);
+    iViolet.alpha = Math.min(1, Math.max(0, (p - 0.18) / 0.15));
+
+    // Phase velocity — slows as waves converge
+    const slowdown = p > 0.4 ? 1 - Math.min(1, (p-0.4)/0.3)*0.85 : 1;
+    iRose.phase   += iRose.phaseV   * slowdown;
+    iViolet.phase += iViolet.phaseV * slowdown;
+
+    // Vertical convergence toward centre
+    if (p > 0.4) {
+      const conv = Math.min(1, (p - 0.4) / 0.35);
+      const ease = conv < 0.5 ? 2*conv*conv : 1-Math.pow(-2*conv+2,2)/2;
+      iRose.y   = 0.18 + (0.50 - 0.18) * ease;
+      iViolet.y = 0.82 - (0.82 - 0.50) * ease;
+      // Amplitude reduces as they meet
+      iRose.amp   = 0.055 - 0.035 * ease;
+      iViolet.amp = 0.050 - 0.032 * ease;
+    }
+
+    // Interference glow at meeting point
+    if (p > 0.62) {
+      const gi = Math.min(1, (p - 0.62) / 0.18);
+      const pulse = p > 0.85 ? 1 - Math.min(1,(p-0.85)/0.12) : 1;
+      ic.save();
+      const g = ic.createRadialGradient(W*.5,H*.5,0,W*.5,H*.5,Math.min(W,H)*(0.2+gi*0.35));
+      g.addColorStop(0, `rgba(220,180,240,${(gi*0.22*pulse).toFixed(3)})`);
+      g.addColorStop(.5, `rgba(185,145,200,${(gi*0.10*pulse).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(152,128,184,0)');
+      ic.fillStyle = g; ic.fillRect(0,0,W,H);
+      // Standing wave line
+      if (gi > 0.5) {
+        ic.globalAlpha = (gi-0.5)*0.8*pulse;
+        ic.strokeStyle = `rgba(230,200,250,0.9)`;
+        ic.lineWidth = 1.5; ic.shadowColor = 'rgba(210,180,240,1)'; ic.shadowBlur = 20;
+        ic.beginPath(); ic.moveTo(0,H*.5); ic.lineTo(W,H*.5); ic.stroke();
+      }
+      ic.restore();
+    }
+
+    // Return phase (0.88+): waves gently separate
+    if (p > 0.88) {
+      const ret = Math.min(1, (p-0.88)/0.10);
+      iRose.y   = 0.50 + (0.18-0.50)*ret*0.3;
+      iViolet.y = 0.50 - (0.50-0.82)*ret*0.3;
+    }
+
+    drawIntroWave(iRose);
+    drawIntroWave(iViolet);
+
+    // Show skip hint after 3s
+    if (t === 180 && skip) skip.classList.add('visible');
+
+    if (t < TOTAL) {
+      introAnimFrame = requestAnimationFrame(introLoop);
+    } else {
+      endIntroAnimation();
+    }
+  }
+
+  // Tap to skip
+  const onSkip = () => { endIntroAnimation(); };
+  screen.addEventListener('click', onSkip, {once: true});
+  screen.addEventListener('touchend', onSkip, {once: true, passive: true});
+
+  showScreen('s-intro', () => { introAnimFrame = requestAnimationFrame(introLoop); });
+}
+
+function endIntroAnimation() {
+  if (introAnimFrame) { cancelAnimationFrame(introAnimFrame); introAnimFrame = null; }
+  lsSet('f2_intro_played', '1');
+  introPlayed = true;
+  const skip = document.getElementById('introSkip');
+  if (skip) skip.classList.remove('visible');
+  showScreen('s-home', () => {
+    document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
+    setTimeout(tryDrone, 300);
+    setTimeout(playLandingAmbient, 600);
+  });
+  applyLang();
+  applyDawnPalette();
+}
+
+// ── INTEGRATE WAVE CONVERGENCE ──
+let convergenceActive = false;
+
+function triggerWaveConvergence() {
+  convergenceActive = true;
+  let frame = 0;
+  const FRAMES = 360; // ~6s
+  const origRoseY   = WAVE_TOP_FRAC;
+  const origVioletY = WAVE_BOT_FRAC;
+
+  const tick = () => {
+    if (!convergenceActive) return;
+    frame++;
+    const p = frame / FRAMES;
+    const ease = p < 0.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
+
+    if (p < 0.45) {
+      // Converge toward centre
+      const conv = Math.min(1, p/0.4);
+      const e2 = conv < 0.5 ? 2*conv*conv : 1-Math.pow(-2*conv+2,2)/2;
+      wRose.targetAmp   = 0.040 - 0.025 * e2;
+      wViolet.targetAmp = 0.040 - 0.025 * e2;
+      // Move y toward centre via direct amp increase not y change
+      waveCoherenceTgt = Math.min(1.0, 0.82 + e2 * 0.18);
+
+    } else if (p < 0.65) {
+      // Hold at convergence — max coherence
+      waveCoherenceTgt = 1.0;
+      wRose.targetAmp   = 0.015;
+      wViolet.targetAmp = 0.015;
+      wRose.targetAlpha   = 0.85;
+      wViolet.targetAlpha = 0.82;
+
+    } else {
+      // Gently return
+      const ret = (p - 0.65) / 0.35;
+      wRose.targetAmp   = 0.015 + 0.027 * ret;
+      wViolet.targetAmp = 0.015 + 0.027 * ret;
+      wRose.targetAlpha   = 0.85 - 0.33 * ret;
+      wViolet.targetAlpha = 0.82 - 0.36 * ret;
+      waveCoherenceTgt = 1.0 - 0.18 * ret;
+    }
+
+    if (frame < FRAMES) {
+      requestAnimationFrame(tick);
+    } else {
+      convergenceActive = false;
+      setWaveState('integrate');
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
 // ── INIT ──
 if (fontLarge) document.body.classList.add('fs-large');
 applyDawnPalette();
 applyLang();
 setWaveState('home');
-tryDrone();
 document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
 updateHomeCount();
-// Re-run applyLang after fonts load to ensure text is visible
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => applyLang());
 } else {
   setTimeout(applyLang, 800);
+}
+
+// First launch: play intro. Otherwise go straight to home
+if (!introPlayed) {
+  // Short delay so home screen loads first, then intro plays
+  setTimeout(() => {
+    tryDrone();
+    playIntroAnimation();
+  }, 400);
+} else {
+  tryDrone();
+  document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
+  setTimeout(playLandingAmbient, 800);
 }
