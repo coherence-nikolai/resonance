@@ -767,6 +767,19 @@ b, strong { font-weight: 400; }
 }
 .polarity-light.visible { opacity: 1; }
 
+.polarity-hold {
+  font-family: var(--sans);
+  font-size: clamp(14px,3.5vw,17px);
+  letter-spacing: .16em;
+  color: rgba(237,224,212,.35);
+  text-align: center;
+  text-transform: lowercase;
+  opacity: 0;
+  transition: opacity 2s ease;
+  margin-top: 4px;
+}
+.polarity-hold.visible { opacity: 1; }
+
 .polarity-both {
   font-family: var(--sans);
   font-size: clamp(16px,4vw,20px);
@@ -1151,6 +1164,7 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
     <div class="polarity-heavy" id="polarityHeavy"></div>
     <div class="polarity-and" id="polarityAnd">and</div>
     <div class="polarity-light" id="polarityLight"></div>
+    <div class="polarity-hold" id="polarityHold"></div>
   </div>
 
   <div class="phase-nav">

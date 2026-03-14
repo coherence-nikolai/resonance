@@ -1,4 +1,4 @@
-const CACHE = 'field-v2-12';
+const CACHE = 'field-v2-13';
 const PRECACHE = [
   './',
   './index.html',

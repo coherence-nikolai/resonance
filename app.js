@@ -128,22 +128,52 @@ function drawWave(wave, yFrac, breathAmp) {
   const w = innerWidth, h = innerHeight;
   const centreY = yFrac * h;
   const totalAmp = (wave.amp + breathAmp) * h;
-  cx.save();
-  cx.beginPath();
+
+  // Build wave path points
   const steps = Math.ceil(w / 2);
+  const pts = [];
   for (let i = 0; i <= steps; i++) {
     const x = (i/steps)*w;
-    const p = Math.sin(x*wave.freq*(w/380)+wave.phase)*totalAmp;
+    const p  = Math.sin(x*wave.freq*(w/380)+wave.phase)*totalAmp;
     const h2 = Math.sin(x*wave.freq*2.1*(w/380)+wave.phase*1.3)*totalAmp*0.32;
     const h3 = Math.sin(x*wave.freq*3.7*(w/380)+wave.phase*0.8)*totalAmp*0.14;
-    i===0 ? cx.moveTo(x,centreY+p+h2+h3) : cx.lineTo(x,centreY+p+h2+h3);
+    pts.push([x, centreY+p+h2+h3]);
   }
-  const glowA = (wave.alpha*(0.7+waveCoherence*0.3)).toFixed(3);
-  cx.strokeStyle = `rgba(${wave.color},${glowA})`;
-  cx.lineWidth = wave.thickness + waveCoherence*2.0 + breathAmp*h*0.6;
+
+  // Layer 1: wide soft glow corona — thread back to v1
+  cx.save();
+  cx.beginPath();
+  pts.forEach(([x,y],i) => i===0 ? cx.moveTo(x,y) : cx.lineTo(x,y));
+  cx.strokeStyle = `rgba(${wave.color},${(wave.alpha*0.25).toFixed(3)})`;
+  cx.lineWidth = 18 + waveCoherence * 28 + breathAmp * h * 1.2;
   cx.lineCap = 'round';
-  cx.shadowColor = `rgba(${wave.color},${(waveCoherence*0.5+breathAmp*3).toFixed(2)})`;
-  cx.shadowBlur = 12 + waveCoherence*24 + breathAmp*h*0.4;
+  cx.filter = 'blur(8px)';
+  cx.stroke();
+  cx.filter = 'none';
+  cx.restore();
+
+  // Layer 2: mid glow
+  cx.save();
+  cx.beginPath();
+  pts.forEach(([x,y],i) => i===0 ? cx.moveTo(x,y) : cx.lineTo(x,y));
+  cx.strokeStyle = `rgba(${wave.color},${(wave.alpha*0.45).toFixed(3)})`;
+  cx.lineWidth = 7 + waveCoherence * 12 + breathAmp * h * 0.6;
+  cx.lineCap = 'round';
+  cx.shadowColor = `rgba(${wave.color},${(waveCoherence*0.6+breathAmp*2.5).toFixed(2)})`;
+  cx.shadowBlur = 14 + waveCoherence * 20 + breathAmp * h * 0.4;
+  cx.stroke();
+  cx.restore();
+
+  // Layer 3: bright core line
+  cx.save();
+  cx.beginPath();
+  pts.forEach(([x,y],i) => i===0 ? cx.moveTo(x,y) : cx.lineTo(x,y));
+  const glowA = (wave.alpha*(0.75+waveCoherence*0.25)).toFixed(3);
+  cx.strokeStyle = `rgba(${wave.color},${glowA})`;
+  cx.lineWidth = wave.thickness + waveCoherence*1.8 + breathAmp*h*0.4;
+  cx.lineCap = 'round';
+  cx.shadowColor = `rgba(${wave.color},${(0.3+waveCoherence*0.4).toFixed(2)})`;
+  cx.shadowBlur = 6 + waveCoherence * 12;
   cx.stroke();
   cx.restore();
 }
@@ -1085,12 +1115,14 @@ function launchAnchor() {
   const pH  = document.getElementById('polarityHeavy');
   const pAnd= document.getElementById('polarityAnd');
   const pL  = document.getElementById('polarityLight');
-  [pH, pAnd, pL].forEach(el => { if (el) el.classList.remove('visible'); });
+  const pH2 = document.getElementById('polarityHold');
+  [pH, pAnd, pL, pH2].forEach(el => { if (el) el.classList.remove('visible'); });
 
   const displayName = CONTRACTIONS[lang][CONTRACTIONS.en.indexOf(currentContraction)] || currentContraction;
   if (pH)   pH.textContent  = lang === 'en' ? `I am carrying ${displayName}.` : `Estoy cargando ${displayName}.`;
   if (pAnd) pAnd.textContent = lang === 'en' ? 'and' : 'y';
   if (pL)   pL.textContent  = complementTxt;
+  if (pH2)  pH2.textContent = lang === 'en' ? 'Hold both. Don\'t resolve either.' : 'Sostén ambos. No resuelvas ninguno.';
 
   const fwd = document.getElementById('fwdAnchor1');
   if (fwd) { fwd.style.opacity = '0'; fwd.style.pointerEvents = 'none'; fwd.textContent = t.continueBtn; }
@@ -1098,29 +1130,36 @@ function launchAnchor() {
   setWaveState('anchor');
   showBackBtn(() => launchHold());
   showScreen('s-anchor', () => {
-    // Slow stagger — each truth gets space to land
     setTimeout(() => { if (!isAlive(tok)) return; if (pH) pH.classList.add('visible'); }, 700);
     setTimeout(() => { if (!isAlive(tok)) return; if (pAnd) pAnd.classList.add('visible'); }, 2400);
     setTimeout(() => {
       if (!isAlive(tok)) return;
       if (!complementTxt && lsGet('f2_api_key')) {
-        fetchPolarityComplement(tok, pL, fwd);
+        fetchPolarityComplement(tok, pL, fwd, pH2);
       } else {
         if (pL) pL.classList.add('visible');
         setTimeout(() => {
-          if (!isAlive(tok) || !fwd) return;
-          fwd.style.opacity = '1'; fwd.style.pointerEvents = 'all';
-        }, 1800);
+          if (!isAlive(tok)) return;
+          if (pH2) pH2.classList.add('visible');
+          setTimeout(() => {
+            if (!isAlive(tok) || !fwd) return;
+            fwd.style.opacity = '1'; fwd.style.pointerEvents = 'all';
+          }, 1400);
+        }, 1200);
       }
     }, 4000);
   });
 }
 
-async function fetchPolarityComplement(tok, pL, fwd) {
+async function fetchPolarityComplement(tok, pL, fwd, pH2) {
   const apiKey = lsGet('f2_api_key');
   if (!apiKey) {
     if (pL) pL.classList.add('visible');
-    setTimeout(() => { if (fwd) { fwd.style.opacity='1'; fwd.style.pointerEvents='all'; }}, 1000);
+    setTimeout(() => {
+      if (!isAlive(tok)) return;
+      if (pH2) pH2.classList.add('visible');
+      setTimeout(() => { if (fwd) { fwd.style.opacity='1'; fwd.style.pointerEvents='all'; }}, 1400);
+    }, 1200);
     return;
   }
   const prompt = `The person is carrying "${currentContraction}". Find the complementary truth — not the opposite, the thing that is ALSO true from lived experience. One sentence, starting with "And". Max 20 words.`;
@@ -1131,13 +1170,21 @@ async function fetchPolarityComplement(tok, pL, fwd) {
       pL.textContent = res;
       pL.classList.add('visible');
       setTimeout(() => {
-        if (!isAlive(tok) || !fwd) return;
-        fwd.style.opacity = '1'; fwd.style.pointerEvents = 'all';
-      }, 1800);
+        if (!isAlive(tok)) return;
+        if (pH2) pH2.classList.add('visible');
+        setTimeout(() => {
+          if (!isAlive(tok) || !fwd) return;
+          fwd.style.opacity = '1'; fwd.style.pointerEvents = 'all';
+        }, 1400);
+      }, 1200);
     }
   } catch(e) {
     if (pL) pL.classList.add('visible');
-    setTimeout(() => { if (fwd) { fwd.style.opacity='1'; fwd.style.pointerEvents='all'; }}, 1000);
+    setTimeout(() => {
+      if (!isAlive(tok)) return;
+      if (pH2) pH2.classList.add('visible');
+      setTimeout(() => { if (fwd) { fwd.style.opacity='1'; fwd.style.pointerEvents='all'; }}, 1400);
+    }, 1000);
   }
 }
 
