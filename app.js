@@ -34,7 +34,9 @@ let sessionToken       = 0;  // unique per session for logging
 
 // Screen transition token
 let screenToken = 0;
-let bgDimTgt = 1; // kept for legacy calls, not actively used
+let bgDimTgt = 1;
+let interferenceFlashVal = 0;
+let interferenceFlashTgt = 0;
 
 // ── CANVAS ──
 const cv = document.getElementById('cv');
@@ -1549,9 +1551,6 @@ const WHISPER_SYSTEM = `You are a quiet field presence. The person has just name
 const WITNESSED_SYSTEM = `You are the field completing a session. You know: what the person was carrying, where it lived in their body, what frequency they anchored, and what one true thing they wrote. Speak one sentence that witnesses this specific session — not generic, not praise. As if the field itself is reflecting back exactly what happened. Past tense. Max 16 words. No exclamation marks.`;
 
 // ── INTERFERENCE FLASH — field recognises what was named ──
-let interferenceFlashVal = 0;
-let interferenceFlashTgt = 0;
-
 function triggerInterferenceFlash() {
   interferenceFlashTgt = 1;
   setTimeout(() => { interferenceFlashTgt = 0; }, 100);
