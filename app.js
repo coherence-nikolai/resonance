@@ -1735,9 +1735,9 @@ function playIntroAnimation() {
   const W = innerWidth, H = innerHeight;
   const TOTAL = 1500; // frames ~25s at 60fps
 
-  // Two wave objects for intro
-  const iRose   = { phase: 0, phaseV: 0.022, amp: 0.055, y: 0.18, color: '200,130,110', alpha: 0 };
-  const iViolet = { phase: Math.PI*0.6, phaseV: 0.028, amp: 0.050, y: 0.82, color: '152,128,184', alpha: 0 };
+  // Two wave objects — start at exact home positions so transition is seamless
+  const iRose   = { phase: 0, phaseV: 0.022, amp: 0.055, y: WAVE_TOP_FRAC, color: '200,130,110', alpha: 0 };
+  const iViolet = { phase: Math.PI*0.6, phaseV: 0.028, amp: 0.050, y: WAVE_BOT_FRAC, color: '152,128,184', alpha: 0 };
 
   function drawIntroWave(wave) {
     const centreY = wave.y * H;
@@ -1768,66 +1768,88 @@ function playIntroAnimation() {
     ic.clearRect(0, 0, W, H);
     t++;
 
-    const p = t / TOTAL; // 0→1 over full sequence
+    const p = t / TOTAL;
 
-    // Phase 1 (0–0.2): rose wave fades in, independent
-    // Phase 2 (0.2–0.4): violet fades in, independent different rhythm
-    // Phase 3 (0.4–0.65): waves slow, begin converging vertically
-    // Phase 4 (0.65–0.85): waves meet at centre, interference glow
-    // Phase 5 (0.85–1.0): standing wave, then gently return
+    // ── PHASE PLAN ──
+    // 0.00–0.15  Rose fades in — independent, lively
+    // 0.18–0.35  Violet fades in — different rhythm, no relationship yet
+    // 0.35–0.60  Both slow gradually — starting to sense each other
+    // 0.60–0.80  Same speed, in phase — synchronised, still apart
+    //            Interference glow brightens between them
+    // 0.78–0.88  "Resonance" fades in at centre
+    // 0.88–1.00  Canvas fades out — crossfade to home
 
-    // Alpha fade in
-    iRose.alpha   = Math.min(1, p / 0.15);
-    iViolet.alpha = Math.min(1, Math.max(0, (p - 0.18) / 0.15));
+    // Alpha
+    iRose.alpha   = Math.min(1, p / 0.13);
+    iViolet.alpha = Math.min(1, Math.max(0, (p - 0.18) / 0.14));
 
-    // Phase velocity — slows as waves converge
-    const slowdown = p > 0.4 ? 1 - Math.min(1, (p-0.4)/0.3)*0.85 : 1;
-    iRose.phase   += iRose.phaseV   * slowdown;
-    iViolet.phase += iViolet.phaseV * slowdown;
+    // Phase velocity — waves slow together, find same rhythm
+    // Rose starts at 0.022, violet at 0.028 — different speeds
+    // By p=0.65 both settle to ~0.007 — same speed = synchronised
+    const syncP = Math.min(1, Math.max(0, (p - 0.35) / 0.30));
+    const syncEase = syncP < 0.5 ? 2*syncP*syncP : 1-Math.pow(-2*syncP+2,2)/2;
+    const roseV   = 0.022 - (0.022 - 0.007) * syncEase;
+    const violetV = 0.028 - (0.028 - 0.007) * syncEase;
+    iRose.phase   += roseV;
+    iViolet.phase += violetV;
 
-    // Vertical convergence toward centre
-    if (p > 0.4) {
-      const conv = Math.min(1, (p - 0.4) / 0.35);
-      const ease = conv < 0.5 ? 2*conv*conv : 1-Math.pow(-2*conv+2,2)/2;
-      iRose.y   = 0.18 + (0.50 - 0.18) * ease;
-      iViolet.y = 0.82 - (0.82 - 0.50) * ease;
-      // Amplitude reduces as they meet
-      iRose.amp   = 0.055 - 0.035 * ease;
-      iViolet.amp = 0.050 - 0.032 * ease;
-    }
+    // Waves stay at their positions — no vertical movement
+    // They are ALWAYS apart — synchronisation is about rhythm not position
+    iRose.y   = WAVE_TOP_FRAC;
+    iViolet.y = WAVE_BOT_FRAC;
 
-    // Interference glow at meeting point
-    if (p > 0.62) {
-      const gi = Math.min(1, (p - 0.62) / 0.18);
-      const pulse = p > 0.85 ? 1 - Math.min(1,(p-0.85)/0.12) : 1;
+    // Amplitude: slightly reduces as they synchronise (steadier)
+    iRose.amp   = 0.055 - 0.015 * syncEase;
+    iViolet.amp = 0.050 - 0.013 * syncEase;
+
+    // Interference glow — grows as waves synchronise
+    const glowP = Math.min(1, Math.max(0, (p - 0.55) / 0.25));
+    const glowFade = p > 0.88 ? Math.max(0, 1 - (p-0.88)/0.12) : 1;
+    if (glowP > 0.05) {
       ic.save();
-      const g = ic.createRadialGradient(W*.5,H*.5,0,W*.5,H*.5,Math.min(W,H)*(0.2+gi*0.35));
-      g.addColorStop(0, `rgba(220,180,240,${(gi*0.22*pulse).toFixed(3)})`);
-      g.addColorStop(.5, `rgba(185,145,200,${(gi*0.10*pulse).toFixed(3)})`);
-      g.addColorStop(1, 'rgba(152,128,184,0)');
-      ic.fillStyle = g; ic.fillRect(0,0,W,H);
-      // Standing wave line
-      if (gi > 0.5) {
-        ic.globalAlpha = (gi-0.5)*0.8*pulse;
-        ic.strokeStyle = `rgba(230,200,250,0.9)`;
-        ic.lineWidth = 1.5; ic.shadowColor = 'rgba(210,180,240,1)'; ic.shadowBlur = 20;
-        ic.beginPath(); ic.moveTo(0,H*.5); ic.lineTo(W,H*.5); ic.stroke();
-      }
+      const g = ic.createRadialGradient(W*.5, H*.5, 0, W*.5, H*.5, Math.min(W,H)*(0.25+glowP*0.3));
+      g.addColorStop(0,  `rgba(220,180,240,${(glowP*0.18*glowFade).toFixed(3)})`);
+      g.addColorStop(.5, `rgba(185,145,200,${(glowP*0.08*glowFade).toFixed(3)})`);
+      g.addColorStop(1,  'rgba(152,128,184,0)');
+      ic.fillStyle = g;
+      ic.fillRect(0, 0, W, H);
       ic.restore();
-    }
-
-    // Return phase (0.88+): waves gently separate
-    if (p > 0.88) {
-      const ret = Math.min(1, (p-0.88)/0.10);
-      iRose.y   = 0.50 + (0.18-0.50)*ret*0.3;
-      iViolet.y = 0.50 - (0.50-0.82)*ret*0.3;
     }
 
     drawIntroWave(iRose);
     drawIntroWave(iViolet);
 
-    // Show skip hint after 3s
-    if (t === 180 && skip) skip.classList.add('visible');
+    // "Resonance" name reveal — fades in as synchronisation peaks
+    const nameP = Math.min(1, Math.max(0, (p - 0.78) / 0.10));
+    const nameFade = p > 0.90 ? Math.max(0, 1 - (p-0.90)/0.08) : 1;
+    if (nameP > 0.01) {
+      const nameAlpha = nameP * nameFade;
+      ic.save();
+      const fs = Math.min(W * 0.14, 64);
+      ic.font = `300 ${fs}px 'Cormorant Garamond', Georgia, serif`;
+      ic.textAlign    = 'center';
+      ic.textBaseline = 'middle';
+      ic.globalAlpha  = nameAlpha;
+      ic.shadowColor  = `rgba(200,130,110,${(nameAlpha * 0.6).toFixed(2)})`;
+      ic.shadowBlur   = 28;
+      ic.fillStyle    = `rgba(200,130,110,1)`;
+      ic.font         = `300 italic ${fs}px 'Cormorant Garamond', Georgia, serif`;
+      ic.fillText('Resonance', W * 0.5, H * 0.5);
+      ic.restore();
+    }
+
+    // Canvas fade out at end — smooth crossfade
+    if (p > 0.88) {
+      const fadeOut = Math.min(1, (p - 0.88) / 0.12);
+      ic.save();
+      ic.globalAlpha = fadeOut;
+      ic.fillStyle   = `#080610`;
+      ic.fillRect(0, 0, W, H);
+      ic.restore();
+    }
+
+    // Show skip hint after 2s
+    if (t === 120 && skip) skip.classList.add('visible');
 
     if (t < TOTAL) {
       introAnimFrame = requestAnimationFrame(introLoop);
@@ -1836,15 +1858,31 @@ function playIntroAnimation() {
     }
   }
 
-  // Tap to skip
-  const onSkip = () => { endIntroAnimation(); };
-  screen.addEventListener('click', onSkip, {once: true});
+  // Tap to skip — fade out gracefully
+  let skipping = false;
+  const onSkip = () => {
+    if (skipping) return;
+    skipping = true;
+    // Fade canvas to black over 400ms then end
+    let fadeT = 0;
+    const fadeOut = () => {
+      fadeT++;
+      const f = Math.min(1, fadeT / 24);
+      ic.save(); ic.globalAlpha = f; ic.fillStyle = '#080610';
+      ic.fillRect(0, 0, W, H); ic.restore();
+      if (f < 1) requestAnimationFrame(fadeOut);
+      else endIntroAnimation();
+    };
+    if (introAnimFrame) { cancelAnimationFrame(introAnimFrame); introAnimFrame = null; }
+    requestAnimationFrame(fadeOut);
+  };
+  screen.addEventListener('click',    onSkip, {once: true});
   screen.addEventListener('touchend', onSkip, {once: true, passive: true});
 
-  // Two-tone intro audio — rose enters first, violet follows, they converge
+  // Audio
   playIntroAudio();
 
-  // s-intro is already active on first load — just start the loop
+  // Start loop
   introAnimFrame = requestAnimationFrame(introLoop);
 }
 
@@ -1892,10 +1930,10 @@ function endIntroAnimation() {
   introPlayed = true;
   const skip = document.getElementById('introSkip');
   if (skip) skip.classList.remove('visible');
-  // Stop any intro audio nodes that might still be playing
+  // Waves are already at WAVE_TOP_FRAC / WAVE_BOT_FRAC — crossfade is seamless
   showScreen('s-home', () => {
     document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
-    setTimeout(tryDrone, 300);
+    setTimeout(tryDrone, 200);
   });
   applyLang();
   applyDawnPalette();
