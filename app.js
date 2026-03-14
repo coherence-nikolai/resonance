@@ -34,6 +34,7 @@ let sessionToken       = 0;  // unique per session for logging
 
 // Screen transition token
 let screenToken = 0;
+let bgDimTgt = 1; // kept for legacy calls, not actively used
 
 // ── CANVAS ──
 const cv = document.getElementById('cv');
@@ -853,7 +854,6 @@ function updateHomeCount() {
     el.textContent = txt;
   } else { el.textContent = ''; }
 }
-}
 
 // ── HOME ──
 function goHome() {
@@ -968,11 +968,15 @@ function confirmEntry(fromPhase) {
   const phase = fromPhase || window._enterFromPhase || 'notice';
   const inp   = document.getElementById('enterInput');
   const raw   = inp ? inp.value.trim() : '';
-  if (!raw) return;
 
-  // Map display name to English key if it's a contraction
-  const enIdx = CONTRACTIONS[lang].indexOf(raw);
-  currentContraction = enIdx >= 0 ? CONTRACTIONS.en[enIdx] : raw;
+  // If input hidden (pill selected), use currentContraction directly
+  if (!raw && !currentContraction) return;
+
+  if (raw) {
+    const enIdx = CONTRACTIONS[lang].indexOf(raw);
+    currentContraction = enIdx >= 0 ? CONTRACTIONS.en[enIdx] : raw;
+  }
+  // currentContraction already set by pill click if raw is empty
 
   if (audioCtx) { if      (phase === 'notice')    playNoticeSound();
                   else if (phase === 'hold')      playHoldSound();
@@ -1028,9 +1032,7 @@ function launchNotice() {
         document.querySelectorAll('.body-zone').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentBodyZone = BODY_ZONES.en[i];
-        if (audioCtx) playSelectTone();
         if (navigator.vibrate) navigator.vibrate(8);
-        // Trigger AI thread
         fetchNoticeReflection(tok);
       });
       bzEl.appendChild(btn);
@@ -1252,7 +1254,7 @@ function advanceToFreq() {
         chosenFrequency = FREQUENCIES.en[enIdx].name;
         if (navigator.vibrate) navigator.vibrate(10);
         const fwd = document.getElementById('fwdAnchor');
-        if (fwd) { fwd.style.opacity='1'; fwd.style.pointerEvents='all'; fwd.textContent = t.continueBtn; }
+        if (fwd) { fwd.classList.add('ready'); fwd.textContent = t.continueBtn; }
       });
       btn.addEventListener('touchend', e => { e.preventDefault(); btn.click(); });
       freqGrid.appendChild(btn);
@@ -1260,7 +1262,7 @@ function advanceToFreq() {
   }
 
   const fwd = document.getElementById('fwdAnchor');
-  if (fwd) { fwd.style.opacity='0'; fwd.style.pointerEvents='none'; }
+  if (fwd) { fwd.classList.remove('ready'); fwd.textContent = ''; }
 
   showBackBtn(() => launchAnchor());
   showScreen('s-freq');

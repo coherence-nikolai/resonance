@@ -655,6 +655,23 @@ b, strong { font-weight: 400; }
   animation: pulse 2.8s ease-in-out infinite;
 }
 .phase-forward:hover { color: var(--rose); }
+.phase-forward.pinned {
+  position: fixed;
+  bottom: 32px;
+  left: 50%; transform: translateX(-50%);
+  background: rgba(8,6,16,.92);
+  border: 1px solid rgba(200,130,110,.2);
+  border-radius: 999px;
+  padding: 14px 36px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 50;
+  white-space: nowrap;
+}
+.phase-forward.pinned.ready {
+  opacity: 1;
+  pointer-events: all;
+}
 .phase-skip {
   font-size: clamp(16px,4vw,20px);
   letter-spacing: .14em;
@@ -1118,8 +1135,7 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
   </div>
   <div class="freq-label" id="freqLabel"></div>
   <div class="freq-grid" id="freqGrid"></div>
-
-  <button class="phase-forward" id="fwdAnchor" style="opacity:0;pointer-events:none;position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:rgba(8,6,16,.92);border:1px solid rgba(200,130,110,.2);border-radius:999px;padding:14px 36px;" onclick="startBreath()"></button>
+  <button class="phase-forward pinned" id="fwdAnchor" onclick="startBreath()"></button>
 </div>
 
 <!-- BREATH — inside anchor -->
