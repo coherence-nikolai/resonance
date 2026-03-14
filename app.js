@@ -57,262 +57,170 @@ window.addEventListener('resize', rsz);
 rsz();
 
 // ── WAVE INTERFERENCE ENGINE ──
-// Two waves — rose and violet — meeting to form a standing interference field
-// This IS the practice: two truths held simultaneously
+// Rose wave: reserved strip just below chrome
+// Violet wave: reserved strip just above nav
+// Content zone always clear between them
 
-// Wave system state
-let waveState = 'home'; // home | notice | hold | anchor | breath | integrate
-let waveCoherence = 0;  // 0–1: how ordered the interference pattern is
+let waveState = 'home';
+let waveCoherence = 0;
 let waveCoherenceTgt = 0;
 let waveTime = 0;
+let waveBreathAmp = 0;
 
-// Rose wave — upper zone (25%)
+// Fixed vertical positions — clear of all content
+const WAVE_TOP_FRAC = 0.13;  // just below chrome
+const WAVE_BOT_FRAC = 0.87;  // just above nav
+
 const wRose = {
-  freq: 0.0018,
-  amp: 0.032,
-  targetAmp: 0.032,
-  phase: 0,
-  phaseV: 0.0018,
-  y: 0.25,
-  targetY: 0.25,
-  color: '200,130,110',
-  alpha: 0.40,
-  targetAlpha: 0.40,
-  thickness: 1.8,
+  freq: 0.0016, amp: 0.058, targetAmp: 0.058,
+  phase: 0, phaseV: 0.022,
+  color: '200,130,110', alpha: 0.52, targetAlpha: 0.52, thickness: 2.5,
 };
-
-// Violet wave — lower zone (75%)
 const wViolet = {
-  freq: 0.0024,
-  amp: 0.030,
-  targetAmp: 0.030,
-  phase: Math.PI * 0.7,
-  phaseV: 0.0022,
-  y: 0.75,
-  targetY: 0.75,
-  color: '152,128,184',
-  alpha: 0.35,
-  targetAlpha: 0.35,
-  thickness: 1.5,
+  freq: 0.0022, amp: 0.052, targetAmp: 0.052,
+  phase: Math.PI * 0.6, phaseV: 0.026,
+  color: '152,128,184', alpha: 0.45, targetAlpha: 0.45, thickness: 2.0,
 };
 
-// Interference zone particles — appear at wave intersection
 const iParticles = [];
-const MAX_IPART = 28;
+const MAX_IPART = 22;
 
 class IParticle {
   constructor(x, y) {
-    this.x = x;
-    this.y = y;
-    this.vx = (Math.random() - 0.5) * 0.4;
-    this.vy = (Math.random() - 0.5) * 0.3;
-    this.r = 0.8 + Math.random() * 1.4;
-    this.alpha = 0;
-    this.targetAlpha = 0.5 + Math.random() * 0.4;
-    this.life = 0;
-    this.maxLife = 120 + Math.random() * 180;
-    // blend of rose and violet
+    this.x = x; this.y = y;
+    this.vx = (Math.random()-0.5)*0.5; this.vy = (Math.random()-0.5)*0.4;
+    this.r = 0.8 + Math.random()*1.6;
+    this.alpha = 0; this.targetAlpha = 0.45 + Math.random()*0.35;
+    this.life = 0; this.maxLife = 100 + Math.random()*160;
     this.isRose = Math.random() < 0.5;
   }
   update() {
     this.life++;
-    this.x += this.vx;
-    this.y += this.vy;
-    this.vx *= 0.992;
-    this.vy *= 0.992;
-    const lifeP = this.life / this.maxLife;
-    const fade = lifeP < 0.15 ? lifeP / 0.15 : lifeP > 0.7 ? 1 - (lifeP - 0.7) / 0.3 : 1;
+    this.x += this.vx; this.y += this.vy;
+    this.vx *= 0.993; this.vy *= 0.993;
+    const p = this.life / this.maxLife;
+    const fade = p < 0.15 ? p/0.15 : p > 0.7 ? 1-(p-0.7)/0.3 : 1;
     this.alpha = this.targetAlpha * fade * waveCoherence;
   }
   draw() {
-    if (this.alpha < 0.01) return;
-    const col = this.isRose ? '200,160,130' : '180,155,210';
+    if (this.alpha < 0.01 || !cx) return;
+    const col = this.isRose ? '210,165,140' : '180,155,210';
     cx.save();
     cx.globalAlpha = this.alpha;
-    const g = cx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 3);
-    g.addColorStop(0, `rgba(${col},1)`);
-    g.addColorStop(1, `rgba(${col},0)`);
+    const g = cx.createRadialGradient(this.x,this.y,0,this.x,this.y,this.r*3.5);
+    g.addColorStop(0,`rgba(${col},1)`); g.addColorStop(1,`rgba(${col},0)`);
     cx.fillStyle = g;
-    cx.beginPath();
-    cx.arc(this.x, this.y, this.r * 3, 0, Math.PI * 2);
-    cx.fill();
+    cx.beginPath(); cx.arc(this.x,this.y,this.r*3.5,0,Math.PI*2); cx.fill();
     cx.restore();
   }
   isDead() { return this.life >= this.maxLife; }
 }
 
-// Spawn interference particles in centre zone
 function spawnInterferenceParticles() {
-  if (waveCoherence < 0.25) return;
-  if (iParticles.length >= MAX_IPART) return;
-  if (Math.random() > 0.14 * waveCoherence) return;
-
-  const w = innerWidth;
+  if (waveCoherence < 0.30 || iParticles.length >= MAX_IPART) return;
+  if (Math.random() > 0.12 * waveCoherence) return;
   const h = innerHeight;
-  const x = Math.random() * w;
-  // Particles float in the centre third of screen
-  const y = h * 0.35 + Math.random() * h * 0.30;
-  iParticles.push(new IParticle(x, y));
+  iParticles.push(new IParticle(Math.random()*innerWidth, h*0.38 + Math.random()*h*0.24));
 }
 
-// Draw a single wave
-function drawWave(wave, coherence) {
-  const w = innerWidth;
-  const h = innerHeight;
-  const centreY = wave.y * h;
-  const amp = wave.amp * h;
-
+function drawWave(wave, yFrac, breathAmp) {
+  if (!cx) return;
+  const w = innerWidth, h = innerHeight;
+  const centreY = yFrac * h;
+  const totalAmp = (wave.amp + breathAmp) * h;
   cx.save();
   cx.beginPath();
-
-  const steps = Math.ceil(w / 3);
+  const steps = Math.ceil(w / 2);
   for (let i = 0; i <= steps; i++) {
-    const x = (i / steps) * w;
-    // Primary frequency + harmonic for organic feel
-    const primary = Math.sin(x * wave.freq * (w / 400) + wave.phase) * amp;
-    const harmonic = Math.sin(x * wave.freq * 2.3 * (w / 400) + wave.phase * 1.4) * amp * 0.28;
-    const y = centreY + primary + harmonic;
-    i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+    const x = (i/steps)*w;
+    const p = Math.sin(x*wave.freq*(w/380)+wave.phase)*totalAmp;
+    const h2 = Math.sin(x*wave.freq*2.1*(w/380)+wave.phase*1.3)*totalAmp*0.32;
+    const h3 = Math.sin(x*wave.freq*3.7*(w/380)+wave.phase*0.8)*totalAmp*0.14;
+    i===0 ? cx.moveTo(x,centreY+p+h2+h3) : cx.lineTo(x,centreY+p+h2+h3);
   }
-
-  // Glow intensifies with coherence
-  const glowA = (wave.alpha * (0.6 + coherence * 0.4)).toFixed(3);
+  const glowA = (wave.alpha*(0.7+waveCoherence*0.3)).toFixed(3);
   cx.strokeStyle = `rgba(${wave.color},${glowA})`;
-  cx.lineWidth = wave.thickness + coherence * 1.8;
+  cx.lineWidth = wave.thickness + waveCoherence*2.0 + breathAmp*h*0.6;
   cx.lineCap = 'round';
-
-  // Shadow glow
-  if (coherence > 0.1) {
-    cx.shadowColor = `rgba(${wave.color},${(coherence * 0.5).toFixed(2)})`;
-    cx.shadowBlur = 8 + coherence * 20;
-  }
+  cx.shadowColor = `rgba(${wave.color},${(waveCoherence*0.5+breathAmp*3).toFixed(2)})`;
+  cx.shadowBlur = 12 + waveCoherence*24 + breathAmp*h*0.4;
   cx.stroke();
-
-  // Fill under wave — very faint ambient
-  cx.beginPath();
-  cx.moveTo(0, centreY);
-  for (let i = 0; i <= steps; i++) {
-    const x = (i / steps) * w;
-    const primary = Math.sin(x * wave.freq * (w / 400) + wave.phase) * amp;
-    const harmonic = Math.sin(x * wave.freq * 2.3 * (w / 400) + wave.phase * 1.4) * amp * 0.28;
-    cx.lineTo(x, centreY + primary + harmonic);
-  }
-  cx.lineTo(w, centreY);
-  cx.closePath();
-  const fillA = (wave.alpha * 0.04 * (1 + coherence)).toFixed(3);
-  cx.fillStyle = `rgba(${wave.color},${fillA})`;
-  cx.fill();
-
   cx.restore();
 }
 
-// Draw interference zone — soft radial glow at screen centre, grows with coherence
 function drawInterferenceZone(coherence) {
-  if (coherence < 0.05) return;
-  const w = innerWidth;
-  const h = innerHeight;
-  const cx2 = w * 0.5;
-  const cy2 = h * 0.5;
-  const r = Math.min(w, h) * (0.3 + coherence * 0.4);
-
+  if (!cx || coherence < 0.08) return;
+  const w = innerWidth, h = innerHeight;
   cx.save();
-  const g = cx.createRadialGradient(cx2, cy2, 0, cx2, cy2, r);
-  const a1 = (coherence * 0.10).toFixed(3);
-  const a2 = (coherence * 0.06).toFixed(3);
-  g.addColorStop(0,   `rgba(210,170,220,${a1})`);
-  g.addColorStop(0.5, `rgba(185,145,200,${a2})`);
-  g.addColorStop(1,   'rgba(152,128,184,0)');
-  cx.fillStyle = g;
-  cx.fillRect(0, 0, w, h);
-
-  // Luminous thread across centre when high coherence
+  const g = cx.createRadialGradient(w*.5,h*.5,0,w*.5,h*.5,Math.min(w,h)*(0.28+coherence*0.38));
+  g.addColorStop(0,`rgba(210,170,220,${(coherence*0.09).toFixed(3)})`);
+  g.addColorStop(.5,`rgba(185,145,200,${(coherence*0.05).toFixed(3)})`);
+  g.addColorStop(1,'rgba(152,128,184,0)');
+  cx.fillStyle = g; cx.fillRect(0,0,w,h);
   if (coherence > 0.65) {
-    const threadA = ((coherence - 0.65) * 0.5).toFixed(3);
-    cx.globalAlpha = parseFloat(threadA);
-    cx.strokeStyle = `rgba(230,205,245,${threadA})`;
-    cx.lineWidth = 0.5;
-    cx.shadowColor = 'rgba(210,180,240,0.8)';
-    cx.shadowBlur = 16;
-    cx.beginPath();
-    cx.moveTo(0, cy2);
-    cx.lineTo(w, cy2);
-    cx.stroke();
+    cx.globalAlpha = (coherence-0.65)*0.35;
+    cx.strokeStyle = `rgba(230,205,245,${((coherence-0.65)*0.5).toFixed(3)})`;
+    cx.lineWidth = 0.5; cx.shadowColor = 'rgba(210,180,240,0.7)'; cx.shadowBlur = 14;
+    cx.beginPath(); cx.moveTo(0,h*.5); cx.lineTo(w,h*.5); cx.stroke();
   }
   cx.restore();
 }
 
-// Update wave physics
 function updateWaves() {
   waveTime++;
-
-  // Ease coherence
-  waveCoherence += (waveCoherenceTgt - waveCoherence) * 0.012;
-
-  // Phase advance — slower when more coherent (waves synchronising)
-  const slowFactor = 1 - waveCoherence * 0.55;
-  wRose.phase   += wRose.phaseV   * slowFactor;
-  wViolet.phase += wViolet.phaseV * slowFactor;
-
-  // Ease wave positions and amplitudes
-  wRose.y      += (wRose.targetY      - wRose.y)      * 0.018;
-  wRose.amp    += (wRose.targetAmp    - wRose.amp)     * 0.02;
-  wRose.alpha  += (wRose.targetAlpha  - wRose.alpha)   * 0.025;
-  wViolet.y    += (wViolet.targetY    - wViolet.y)     * 0.018;
-  wViolet.amp  += (wViolet.targetAmp  - wViolet.amp)   * 0.02;
-  wViolet.alpha+= (wViolet.targetAlpha- wViolet.alpha) * 0.025;
-
-  // Spawn and update interference particles
+  waveCoherence += (waveCoherenceTgt - waveCoherence) * 0.010;
+  waveBreathAmp += (0 - waveBreathAmp) * 0.045;
+  const slow = 1 - waveCoherence * 0.72;
+  wRose.phase   += wRose.phaseV   * slow;
+  wViolet.phase += wViolet.phaseV * slow;
+  wRose.amp   += (wRose.targetAmp   - wRose.amp)   * 0.018;
+  wViolet.amp += (wViolet.targetAmp - wViolet.amp)  * 0.018;
+  wRose.alpha   += (wRose.targetAlpha   - wRose.alpha)   * 0.022;
+  wViolet.alpha += (wViolet.targetAlpha - wViolet.alpha)  * 0.022;
   spawnInterferenceParticles();
-  for (let i = iParticles.length - 1; i >= 0; i--) {
+  for (let i = iParticles.length-1; i >= 0; i--) {
     iParticles[i].update();
-    if (iParticles[i].isDead()) iParticles.splice(i, 1);
+    if (iParticles[i].isDead()) iParticles.splice(i,1);
   }
 }
 
 function setWaveState(state) {
   waveState = state;
   if (state === 'home') {
-    wRose.targetY   = 0.25; wViolet.targetY = 0.75;
-    wRose.targetAmp = 0.032; wViolet.targetAmp = 0.028;
-    wRose.targetAlpha = 0.38; wViolet.targetAlpha = 0.32;
-    wRose.phaseV    = 0.0022; wViolet.phaseV = 0.0026;
-    waveCoherenceTgt = 0.05;
-
+    wRose.targetAmp=0.062; wViolet.targetAmp=0.056;
+    wRose.targetAlpha=0.50; wViolet.targetAlpha=0.42;
+    wRose.phaseV=0.022; wViolet.phaseV=0.028; // independent rhythms
+    waveCoherenceTgt=0.05;
   } else if (state === 'notice') {
-    wRose.targetY   = 0.25; wViolet.targetY = 0.75;
-    wRose.targetAmp = 0.038; wViolet.targetAmp = 0.032;
-    wRose.targetAlpha = 0.48; wViolet.targetAlpha = 0.40;
-    wRose.phaseV    = 0.0016; wViolet.phaseV = 0.0018;
-    waveCoherenceTgt = 0.20;
-
+    wRose.targetAmp=0.066; wViolet.targetAmp=0.060;
+    wRose.targetAlpha=0.58; wViolet.targetAlpha=0.50;
+    wRose.phaseV=0.018; wViolet.phaseV=0.022; // slowing
+    waveCoherenceTgt=0.22;
   } else if (state === 'hold') {
-    wRose.targetY   = 0.25; wViolet.targetY = 0.75;
-    wRose.targetAmp = 0.032; wViolet.targetAmp = 0.028;
-    wRose.targetAlpha = 0.55; wViolet.targetAlpha = 0.48;
-    wRose.phaseV    = 0.0010; wViolet.phaseV = 0.0012;
-    waveCoherenceTgt = 0.42;
-
+    wRose.targetAmp=0.058; wViolet.targetAmp=0.054;
+    wRose.targetAlpha=0.62; wViolet.targetAlpha=0.55;
+    wRose.phaseV=0.013; wViolet.phaseV=0.015; // slowing further
+    waveCoherenceTgt=0.45;
   } else if (state === 'anchor') {
-    wRose.targetY   = 0.25; wViolet.targetY = 0.75;
-    wRose.targetAmp = 0.026; wViolet.targetAmp = 0.026;
-    wRose.targetAlpha = 0.65; wViolet.targetAlpha = 0.58;
-    wRose.phaseV    = 0.0007; wViolet.phaseV = 0.0008;
-    waveCoherenceTgt = 0.70;
-
+    wRose.targetAmp=0.050; wViolet.targetAmp=0.048;
+    wRose.targetAlpha=0.68; wViolet.targetAlpha=0.62;
+    wRose.phaseV=0.009; wViolet.phaseV=0.010; // nearly same speed
+    waveCoherenceTgt=0.72;
   } else if (state === 'breath') {
-    wRose.targetY   = 0.25; wViolet.targetY = 0.75;
-    wRose.targetAmp = 0.018; wViolet.targetAmp = 0.018;
-    wRose.targetAlpha = 0.72; wViolet.targetAlpha = 0.68;
-    wRose.phaseV    = 0.0005; wViolet.phaseV = 0.0005;
-    waveCoherenceTgt = 1.0;
-
+    wRose.targetAmp=0.040; wViolet.targetAmp=0.040;
+    wRose.targetAlpha=0.75; wViolet.targetAlpha=0.72;
+    wRose.phaseV=0.006; wViolet.phaseV=0.006; // synchronised
+    waveCoherenceTgt=1.0;
   } else if (state === 'integrate') {
-    wRose.targetY   = 0.25; wViolet.targetY = 0.75;
-    wRose.targetAmp = 0.022; wViolet.targetAmp = 0.022;
-    wRose.targetAlpha = 0.48; wViolet.targetAlpha = 0.42;
-    wRose.phaseV    = 0.0007; wViolet.phaseV = 0.0007;
-    waveCoherenceTgt = 0.80;
+    wRose.targetAmp=0.044; wViolet.targetAmp=0.042;
+    wRose.targetAlpha=0.52; wViolet.targetAlpha=0.46;
+    wRose.phaseV=0.007; wViolet.phaseV=0.007; // settled
+    waveCoherenceTgt=0.82;
   }
+}
+
+function pulseWavesFromBreath(intensity) {
+  waveBreathAmp = Math.max(waveBreathAmp, intensity * 0.048);
 }
 
 // Background grain — organic texture
@@ -555,8 +463,8 @@ function loop() {
   updateWaves();
   const renderCoherence = getFlashCoherence();
   drawInterferenceZone(renderCoherence);
-  drawWave(wRose,   renderCoherence);
-  drawWave(wViolet, renderCoherence);
+  drawWave(wRose,   WAVE_TOP_FRAC, waveBreathAmp);
+  drawWave(wViolet, WAVE_BOT_FRAC, waveBreathAmp);
   iParticles.forEach(p => p.draw());
 
   if (breathOrb) { breathOrb.update(); breathOrb.draw(); drawBreathRing(); }
@@ -1036,10 +944,7 @@ function startNotice() {
   try {
     lsSet('f2_cnt_notice', parseInt(lsGet('f2_cnt_notice')||'0')+1);
     startEnter('notice');
-  } catch(e) {
-    console.error('startNotice error:', e);
-    alert('Error: ' + e.message + ' at ' + e.stack);
-  }
+  } catch(e) { console.error('startNotice:', e); }
 }
 function startHold()      { lsSet('f2_cnt_hold',      parseInt(lsGet('f2_cnt_hold')      ||'0')+1); startEnter('hold');      }
 function startAnchor()    { lsSet('f2_cnt_anchor',    parseInt(lsGet('f2_cnt_anchor')    ||'0')+1); startEnter('anchor');    }
@@ -1373,9 +1278,11 @@ function startBreath() {
       bDelay(() => showBtext(cues.inhale), 300);
       hideBtext(breathOrb.INHALE - 700);
       playBreathInhale();
+      pulseWavesFromBreath(0.6 + cycle * 0.15); // waves expand with inhale
     } else if (phase === 'hold') {
       if (breathOrb) breathOrb.wordTargetAlpha = 0.5;
       bDelay(() => showBtext(cues.hold), 100);
+      pulseWavesFromBreath(0.4);
     } else if (phase === 'exhale') {
       if (breathOrb) {
         breathOrb.wordTargetAlpha    = [0.35, 0.55, 1.0][Math.min(cycle, 2)];
@@ -1384,6 +1291,7 @@ function startBreath() {
       showBtext(cues.exhale);
       hideBtext(breathOrb.EXHALE - 700);
       playBreathExhale();
+      pulseWavesFromBreath(0.3); // gentler on exhale
     } else if (phase === 'rest') {
       const dot = document.getElementById('bdot' + (cycle - 1));
       if (dot) dot.classList.add('done');

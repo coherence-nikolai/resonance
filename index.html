@@ -106,6 +106,11 @@ b, strong { font-weight: 400; }
 @keyframes da3 { 0%,100%{transform:translate(0,0)} 33%{transform:translate(-3vw,5vw)} 66%{transform:translate(4vw,-3vw)} }
 
 /* ── SCREENS ── */
+/* Wave zones: top 76px (chrome + rose wave strip), bottom 100px (nav + violet wave strip) */
+:root {
+  --wave-top: 76px;    /* rose wave zone bottom edge */
+  --wave-bot: 100px;   /* violet wave zone top edge from bottom */
+}
 .screen {
   position: fixed; inset: 0;
   z-index: 10;
@@ -113,7 +118,7 @@ b, strong { font-weight: 400; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: clamp(20px,5vw,40px);
+  padding: calc(var(--wave-top) + 16px) clamp(20px,5vw,40px) calc(var(--wave-bot) + 16px);
   pointer-events: none;
 }
 .screen.active {
@@ -285,7 +290,6 @@ b, strong { font-weight: 400; }
 #s-home {
   justify-content: center;
   gap: 0;
-  padding-top: clamp(60px,14vw,80px);
 }
 
 .field-wordmark {
@@ -387,8 +391,8 @@ b, strong { font-weight: 400; }
   justify-content: flex-start;
   gap: 0;
   text-align: center;
-  padding-top: clamp(70px,16vw,90px);
-  padding-bottom: 100px;
+  padding-top: calc(var(--wave-top) + 24px);
+  padding-bottom: calc(var(--wave-bot) + 80px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -525,7 +529,8 @@ b, strong { font-weight: 400; }
 #s-freq {
   justify-content: center;
   gap: clamp(18px,4.5vw,28px);
-  padding: clamp(70px,16vw,90px) 16px 110px;
+  padding-left: 16px;
+  padding-right: 16px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -555,9 +560,8 @@ b, strong { font-weight: 400; }
 /* ── PHASE SCREENS — Notice, Hold, Anchor, Integrate ── */
 .phase-screen {
   justify-content: center;
-  gap: clamp(20px,5vw,32px);
+  gap: clamp(16px,4vw,24px);
   text-align: center;
-  padding-top: clamp(60px,14vw,80px);
 }
 
 .phase-indicator {
@@ -713,7 +717,6 @@ b, strong { font-weight: 400; }
 #s-anchor {
   justify-content: center;
   gap: clamp(16px,4vw,24px);
-  padding-top: clamp(60px,14vw,80px);
 }
 
 .polarity-wrap {
@@ -1202,16 +1205,6 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
 </div>
 
 <script src="data.js"></script>
-<script>
-// Catch any errors before app.js runs
-window.onerror = function(msg, src, line, col, err) {
-  const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:20px;z-index:9999;font-size:16px;word-break:break-all;';
-  d.textContent = 'ERROR: ' + msg + ' | Line: ' + line + ' | ' + (src||'').split('/').pop();
-  document.body.appendChild(d);
-  return false;
-};
-</script>
 <script src="app.js"></script>
 </body>
 </html>
