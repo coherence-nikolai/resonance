@@ -1715,6 +1715,11 @@ function playIntroAnimation() {
 
   if (introAnimFrame) cancelAnimationFrame(introAnimFrame);
 
+  // Ensure intro screen is visible
+  if (!screen.classList.contains('active')) {
+    showScreen('s-intro');
+  }
+
   const ic = canvas.getContext('2d');
   const setSize = () => {
     const dpr = window.devicePixelRatio || 1;
@@ -1965,29 +1970,25 @@ if (document.fonts && document.fonts.ready) {
 // First launch: play intro animation (s-intro already active)
 // Returning: skip to home directly
 if (!introPlayed) {
-  // Init audio on first interaction, then play intro
-  const startIntro = () => {
-    document.removeEventListener('touchstart', startIntro);
-    document.removeEventListener('click', startIntro);
+  // Start visual animation immediately — no tap needed
+  // Audio starts on first tap (iOS requirement)
+  const enableAudio = () => {
+    document.removeEventListener('touchstart', enableAudio);
+    document.removeEventListener('click', enableAudio);
     initAudio();
     resumeAudio();
-    playIntroAnimation();
   };
-  document.addEventListener('touchstart', startIntro, {once: true, passive: true});
-  document.addEventListener('click', startIntro, {once: true});
-  // Show skip hint immediately so user knows they can tap
-  setTimeout(() => {
-    const skip = document.getElementById('introSkip');
-    if (skip) skip.classList.add('visible');
-  }, 500);
+  document.addEventListener('touchstart', enableAudio, {once: true, passive: true});
+  document.addEventListener('click', enableAudio, {once: true});
+  // Run animation immediately
+  setTimeout(() => playIntroAnimation(), 100);
 } else {
   // Skip intro — go straight to home
-  const home = document.getElementById('s-home');
+  const home  = document.getElementById('s-home');
   const intro = document.getElementById('s-intro');
-  if (intro) { intro.classList.remove('active'); }
-  if (home)  { home.classList.add('active'); }
+  if (intro) intro.classList.remove('active');
+  if (home)  home.classList.add('active');
   document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
-  // Drone starts on first tap (iOS requires gesture)
   const startAudio = () => {
     document.removeEventListener('touchstart', startAudio);
     document.removeEventListener('click', startAudio);

@@ -1,4 +1,4 @@
-const CACHE = 'resonance-v1-2';
+const CACHE = 'resonance-v1-3';
 const PRECACHE = [
   './',
   './index.html',
