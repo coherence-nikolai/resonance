@@ -51,109 +51,295 @@ function rsz() {
 window.addEventListener('resize', rsz);
 rsz();
 
-// ── BACKGROUND PARTICLES ──
-// Carried from v1 — warm violet/rose palette
-class Pt {
-  constructor() { this.reset(true); }
-  reset(init) {
-    this.x  = Math.random() * innerWidth;
-    this.y  = init ? Math.random() * innerHeight : innerHeight + 5;
-    this.vy = -(0.06 + Math.random() * 0.14);
-    this.r  = Math.random() * 0.8 + 0.15;
-    this.alpha = Math.random() * 0.18 + 0.03;
-    this.targetAlpha = this.alpha;
-    // warm violet or rose tint
-    this.hue = Math.random() < 0.6 ? 'violet' : 'rose';
-  }
-  update() {
-    this.y += this.vy;
-    if (this.y < -5) this.reset(false);
-    this.alpha += (this.targetAlpha - this.alpha) * 0.04;
-  }
-  draw() {
-    const col = this.hue === 'violet'
-      ? `rgba(152,128,184,${(this.alpha * bgDim).toFixed(3)})`
-      : `rgba(200,130,110,${(this.alpha * bgDim).toFixed(3)})`;
-    cx.fillStyle = col;
-    cx.beginPath();
-    cx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-    cx.fill();
-  }
-}
-const bgPts  = Array.from({length: 60}, () => new Pt());
-let bgDim    = 1;
-let bgDimTgt = 1;
+// ── WAVE INTERFERENCE ENGINE ──
+// Two waves — rose and violet — meeting to form a standing interference field
+// This IS the practice: two truths held simultaneously
 
-// ── FIELD PARTICLES — two-body system ──
-// V2: two fields in relationship, standing wave between them
-class FieldParticle {
-  constructor(i, total) {
-    this.idx = i;
-    const angle = (Math.PI * 2 / total) * i + Math.random() * 0.4;
-    const r     = 0.22 + Math.random() * 0.18;
-    this.cx = 0.5 + Math.cos(angle) * r;
-    this.cy = 0.46 + Math.sin(angle) * r;
-    this.targetCx = this.cx;
-    this.targetCy = this.cy;
-    this.x   = this.cx * innerWidth;
-    this.y   = this.cy * innerHeight;
-    this.ph  = Math.random() * Math.PI * 2;
-    this.phV = 0.004 + Math.random() * 0.004;
-    this.dr  = 16 + Math.random() * 14;
-    this.r   = 1.8 + Math.random() * 1.0;
-    this.alpha        = 0;
-    this.targetAlpha  = 0;
-    this.clarity      = 0;
-    this.targetClarity= 0;
-    // warm violet or rose
-    this.hue = i % 3 === 0 ? 'rose' : 'violet';
+// Wave system state
+let waveState = 'home'; // home | notice | hold | anchor | breath | integrate
+let waveCoherence = 0;  // 0–1: how ordered the interference pattern is
+let waveCoherenceTgt = 0;
+let waveTime = 0;
+
+// Rose wave (heavy / what is carried)
+const wRose = {
+  freq: 0.0018,
+  amp: 0.11,
+  targetAmp: 0.11,
+  phase: 0,
+  phaseV: 0.0018,
+  y: 0.52,        // vertical centre as fraction of height
+  targetY: 0.52,
+  color: '200,130,110',
+  alpha: 0.55,
+  targetAlpha: 0.55,
+  thickness: 2.2,
+};
+
+// Violet wave (complement / what is also true)
+const wViolet = {
+  freq: 0.0024,
+  amp: 0.09,
+  targetAmp: 0.09,
+  phase: Math.PI * 0.7,
+  phaseV: 0.0022,
+  y: 0.48,
+  targetY: 0.48,
+  color: '152,128,184',
+  alpha: 0.45,
+  targetAlpha: 0.45,
+  thickness: 1.8,
+};
+
+// Interference zone particles — appear at wave intersection
+const iParticles = [];
+const MAX_IPART = 28;
+
+class IParticle {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = (Math.random() - 0.5) * 0.3;
+    this.r = 0.8 + Math.random() * 1.4;
+    this.alpha = 0;
+    this.targetAlpha = 0.5 + Math.random() * 0.4;
+    this.life = 0;
+    this.maxLife = 120 + Math.random() * 180;
+    // blend of rose and violet
+    this.isRose = Math.random() < 0.5;
   }
   update() {
-    this.ph  += this.phV;
-    this.cx  += (this.targetCx - this.cx) * 0.018;
-    this.cy  += (this.targetCy - this.cy) * 0.018;
-    const ds  = Math.min(innerWidth, innerHeight);
-    this.x = this.cx * innerWidth  + Math.cos(this.ph) * this.dr * (ds / 500);
-    this.y = this.cy * innerHeight + Math.sin(this.ph * 0.73) * this.dr * 0.65 * (ds / 500);
-    this.alpha   += (this.targetAlpha   - this.alpha)   * 0.025;
-    this.clarity += (this.targetClarity - this.clarity) * 0.03;
+    this.life++;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vx *= 0.992;
+    this.vy *= 0.992;
+    const lifeP = this.life / this.maxLife;
+    const fade = lifeP < 0.15 ? lifeP / 0.15 : lifeP > 0.7 ? 1 - (lifeP - 0.7) / 0.3 : 1;
+    this.alpha = this.targetAlpha * fade * waveCoherence;
   }
   draw() {
     if (this.alpha < 0.01) return;
-    const blur = (1 - this.clarity) * 18 + 3;
-    const glow = 8 + this.clarity * 22;
+    const col = this.isRose ? '200,160,130' : '180,155,210';
     cx.save();
-    cx.filter = `blur(${blur.toFixed(1)}px)`;
-    const col = this.hue === 'violet'
-      ? `rgba(152,128,184,${(this.alpha * 0.42).toFixed(3)})`
-      : `rgba(200,130,110,${(this.alpha * 0.42).toFixed(3)})`;
-    const grad = cx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glow);
-    grad.addColorStop(0, col);
-    grad.addColorStop(1, 'rgba(152,128,184,0)');
-    cx.fillStyle = grad;
-    cx.beginPath();
-    cx.arc(this.x, this.y, glow, 0, Math.PI * 2);
-    cx.fill();
     cx.globalAlpha = this.alpha;
-    cx.fillStyle = this.hue === 'violet'
-      ? `rgba(200,185,230,${(0.5 + this.clarity * 0.5).toFixed(3)})`
-      : `rgba(224,170,150,${(0.5 + this.clarity * 0.5).toFixed(3)})`;
+    const g = cx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 3);
+    g.addColorStop(0, `rgba(${col},1)`);
+    g.addColorStop(1, `rgba(${col},0)`);
+    cx.fillStyle = g;
     cx.beginPath();
-    cx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    cx.arc(this.x, this.y, this.r * 3, 0, Math.PI * 2);
     cx.fill();
     cx.restore();
   }
+  isDead() { return this.life >= this.maxLife; }
 }
 
-let fieldParticles = [];
+// Spawn interference particles where waves intersect
+function spawnInterferenceParticles() {
+  if (waveCoherence < 0.15) return;
+  if (iParticles.length >= MAX_IPART) return;
+  if (Math.random() > 0.18 * waveCoherence) return;
 
-function initFieldParticles(n) {
-  fieldParticles = Array.from({length: n}, (_, i) => new FieldParticle(i, n));
-  fieldParticles.forEach(p => {
-    p.targetAlpha   = 0.35 + Math.random() * 0.25;
-    p.targetClarity = 0;
-  });
+  const w = innerWidth;
+  const h = innerHeight;
+  // Find approximate intersection zone — between the two wave centres
+  const rY = wRose.y * h;
+  const vY = wViolet.y * h;
+  const midY = (rY + vY) / 2;
+  const x = Math.random() * w;
+  // y near intersection, with spread based on coherence
+  const spread = (1 - waveCoherence) * 60 + 10;
+  const y = midY + (Math.random() - 0.5) * spread;
+  iParticles.push(new IParticle(x, y));
 }
+
+// Draw a single wave
+function drawWave(wave, coherence) {
+  const w = innerWidth;
+  const h = innerHeight;
+  const centreY = wave.y * h;
+  const amp = wave.amp * h;
+
+  cx.save();
+  cx.beginPath();
+
+  const steps = Math.ceil(w / 3);
+  for (let i = 0; i <= steps; i++) {
+    const x = (i / steps) * w;
+    // Primary frequency + harmonic for organic feel
+    const primary = Math.sin(x * wave.freq * (w / 400) + wave.phase) * amp;
+    const harmonic = Math.sin(x * wave.freq * 2.3 * (w / 400) + wave.phase * 1.4) * amp * 0.28;
+    const y = centreY + primary + harmonic;
+    i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+  }
+
+  // Glow intensifies with coherence
+  const glowA = (wave.alpha * (0.6 + coherence * 0.4)).toFixed(3);
+  cx.strokeStyle = `rgba(${wave.color},${glowA})`;
+  cx.lineWidth = wave.thickness + coherence * 1.8;
+  cx.lineCap = 'round';
+
+  // Shadow glow
+  if (coherence > 0.1) {
+    cx.shadowColor = `rgba(${wave.color},${(coherence * 0.5).toFixed(2)})`;
+    cx.shadowBlur = 8 + coherence * 20;
+  }
+  cx.stroke();
+
+  // Fill under wave — very faint ambient
+  cx.beginPath();
+  cx.moveTo(0, centreY);
+  for (let i = 0; i <= steps; i++) {
+    const x = (i / steps) * w;
+    const primary = Math.sin(x * wave.freq * (w / 400) + wave.phase) * amp;
+    const harmonic = Math.sin(x * wave.freq * 2.3 * (w / 400) + wave.phase * 1.4) * amp * 0.28;
+    cx.lineTo(x, centreY + primary + harmonic);
+  }
+  cx.lineTo(w, centreY);
+  cx.closePath();
+  const fillA = (wave.alpha * 0.04 * (1 + coherence)).toFixed(3);
+  cx.fillStyle = `rgba(${wave.color},${fillA})`;
+  cx.fill();
+
+  cx.restore();
+}
+
+// Draw the interference zone — glowing band between waves
+function drawInterferenceZone(coherence) {
+  if (coherence < 0.05) return;
+  const w = innerWidth;
+  const h = innerHeight;
+  const rY = wRose.y * h;
+  const vY = wViolet.y * h;
+  const midY = (rY + vY) / 2;
+  const spread = Math.abs(rY - vY) * 0.5 + 20;
+
+  cx.save();
+  const g = cx.createLinearGradient(0, midY - spread * 2, 0, midY + spread * 2);
+  const a = (coherence * 0.12).toFixed(3);
+  g.addColorStop(0,   'rgba(200,160,200,0)');
+  g.addColorStop(0.3, `rgba(200,155,190,${a})`);
+  g.addColorStop(0.5, `rgba(220,170,200,${(coherence * 0.18).toFixed(3)})`);
+  g.addColorStop(0.7, `rgba(200,155,190,${a})`);
+  g.addColorStop(1,   'rgba(200,160,200,0)');
+  cx.fillStyle = g;
+  cx.fillRect(0, midY - spread * 2, w, spread * 4);
+
+  // Luminous thread at exact midpoint when coherence high
+  if (coherence > 0.5) {
+    cx.globalAlpha = (coherence - 0.5) * 0.7;
+    cx.strokeStyle = `rgba(230,200,240,${((coherence - 0.5) * 0.8).toFixed(2)})`;
+    cx.lineWidth = 0.5;
+    cx.shadowColor = 'rgba(200,160,230,0.9)';
+    cx.shadowBlur = 12;
+    cx.beginPath();
+    cx.moveTo(0, midY);
+    cx.lineTo(w, midY);
+    cx.stroke();
+  }
+  cx.restore();
+}
+
+// Update wave physics
+function updateWaves() {
+  waveTime++;
+
+  // Ease coherence
+  waveCoherence += (waveCoherenceTgt - waveCoherence) * 0.012;
+
+  // Phase advance — slower when more coherent (waves synchronising)
+  const slowFactor = 1 - waveCoherence * 0.55;
+  wRose.phase   += wRose.phaseV   * slowFactor;
+  wViolet.phase += wViolet.phaseV * slowFactor;
+
+  // Ease wave positions and amplitudes
+  wRose.y      += (wRose.targetY      - wRose.y)      * 0.018;
+  wRose.amp    += (wRose.targetAmp    - wRose.amp)     * 0.02;
+  wRose.alpha  += (wRose.targetAlpha  - wRose.alpha)   * 0.025;
+  wViolet.y    += (wViolet.targetY    - wViolet.y)     * 0.018;
+  wViolet.amp  += (wViolet.targetAmp  - wViolet.amp)   * 0.02;
+  wViolet.alpha+= (wViolet.targetAlpha- wViolet.alpha) * 0.025;
+
+  // Spawn and update interference particles
+  spawnInterferenceParticles();
+  for (let i = iParticles.length - 1; i >= 0; i--) {
+    iParticles[i].update();
+    if (iParticles[i].isDead()) iParticles.splice(i, 1);
+  }
+}
+
+// Set wave state per phase
+function setWaveState(state) {
+  waveState = state;
+  if (state === 'home') {
+    // Two waves moving independently — 3D state
+    wRose.targetY   = 0.54; wViolet.targetY = 0.46;
+    wRose.targetAmp = 0.10; wViolet.targetAmp = 0.09;
+    wRose.targetAlpha = 0.45; wViolet.targetAlpha = 0.38;
+    wRose.phaseV    = 0.0022; wViolet.phaseV = 0.0026;
+    waveCoherenceTgt = 0;
+
+  } else if (state === 'notice') {
+    // Slightly more present, starting to slow
+    wRose.targetY   = 0.55; wViolet.targetY = 0.45;
+    wRose.targetAmp = 0.12; wViolet.targetAmp = 0.10;
+    wRose.targetAlpha = 0.55; wViolet.targetAlpha = 0.48;
+    wRose.phaseV    = 0.0018; wViolet.phaseV = 0.0020;
+    waveCoherenceTgt = 0.15;
+
+  } else if (state === 'hold') {
+    // Waves slow, moving toward each other
+    wRose.targetY   = 0.54; wViolet.targetY = 0.46;
+    wRose.targetAmp = 0.10; wViolet.targetAmp = 0.09;
+    wRose.targetAlpha = 0.60; wViolet.targetAlpha = 0.55;
+    wRose.phaseV    = 0.0012; wViolet.phaseV = 0.0014;
+    waveCoherenceTgt = 0.35;
+
+  } else if (state === 'anchor') {
+    // Interference pattern emerging — waves converge
+    wRose.targetY   = 0.52; wViolet.targetY = 0.48;
+    wRose.targetAmp = 0.08; wViolet.targetAmp = 0.08;
+    wRose.targetAlpha = 0.70; wViolet.targetAlpha = 0.65;
+    wRose.phaseV    = 0.0009; wViolet.phaseV = 0.0010;
+    waveCoherenceTgt = 0.65;
+
+  } else if (state === 'breath') {
+    // Standing wave — maximum coherence
+    wRose.targetY   = 0.50; wViolet.targetY = 0.50;
+    wRose.targetAmp = 0.06; wViolet.targetAmp = 0.06;
+    wRose.targetAlpha = 0.75; wViolet.targetAlpha = 0.72;
+    wRose.phaseV    = 0.0006; wViolet.phaseV = 0.0006;
+    waveCoherenceTgt = 1.0;
+
+  } else if (state === 'integrate') {
+    // Settled — slow coherent pulse
+    wRose.targetY   = 0.52; wViolet.targetY = 0.48;
+    wRose.targetAmp = 0.07; wViolet.targetAmp = 0.07;
+    wRose.targetAlpha = 0.55; wViolet.targetAlpha = 0.50;
+    wRose.phaseV    = 0.0008; wViolet.phaseV = 0.0008;
+    waveCoherenceTgt = 0.75;
+  }
+}
+
+// Background grain — organic texture
+const grainCanvas = document.createElement('canvas');
+grainCanvas.width  = 256;
+grainCanvas.height = 256;
+(function buildGrain() {
+  const gc = grainCanvas.getContext('2d');
+  const id = gc.createImageData(256, 256);
+  for (let i = 0; i < id.data.length; i += 4) {
+    const v = Math.random() * 18;
+    id.data[i]   = v + 6;
+    id.data[i+1] = v + 4;
+    id.data[i+2] = v + 8;
+    id.data[i+3] = Math.random() * 22;
+  }
+  gc.putImageData(id, 0, 0);
+})();
+let grainPattern = null;
 
 // ── BREATH ORB — carried from v1 with v2 palette ──
 class BreathOrb {
@@ -358,9 +544,25 @@ let breathOrb = null;
 // ── RENDER LOOP ──
 function loop() {
   cx.clearRect(0, 0, cv.width, cv.height);
-  bgDim += (bgDimTgt - bgDim) * 0.03;
-  bgPts.forEach(p => { p.update(); p.draw(); });
-  fieldParticles.forEach(p => { p.update(); p.draw(); });
+
+  // Grain texture
+  if (!grainPattern) {
+    try { grainPattern = cx.createPattern(grainCanvas, 'repeat'); } catch(e) {}
+  }
+  if (grainPattern) {
+    cx.save();
+    cx.globalAlpha = 0.28;
+    cx.fillStyle = grainPattern;
+    cx.fillRect(0, 0, innerWidth, innerHeight);
+    cx.restore();
+  }
+
+  updateWaves();
+  drawInterferenceZone(waveCoherence);
+  drawWave(wRose,   waveCoherence);
+  drawWave(wViolet, waveCoherence);
+  iParticles.forEach(p => p.draw());
+
   if (breathOrb) { breathOrb.update(); breathOrb.draw(); drawBreathRing(); }
   requestAnimationFrame(loop);
 }
@@ -617,16 +819,10 @@ function applyLang() {
   document.documentElement.lang = lang;
   const t = TRANSLATIONS[lang];
   // Home
-  const ha = document.getElementById('homeArrival');
-  if (ha) ha.innerHTML = `${t.arrival}<br><span style="font-size:.72em;letter-spacing:.18em;color:rgba(152,128,184,.55);font-style:normal;">${t.arrivalSub}</span>`;
-  setText('lbl-notice',    t.noticeLabel);
-  setText('lbl-hold',      t.holdLabel);
-  setText('lbl-anchor',    t.anchorLabel);
-  setText('lbl-integrate', t.integrateLabel);
-  setText('hint-notice',    t.noticeHint);
-  setText('hint-hold',      t.holdHint);
-  setText('hint-anchor',    t.anchorHint);
-  setText('hint-integrate', t.integrateHint);
+  const ha  = document.getElementById('homeArrival');
+  const hsub= document.getElementById('homeArrivalSub');
+  if (ha)   ha.textContent   = t.arrival;
+  if (hsub) hsub.textContent = t.arrivalSub;
   // Lang segs
   const en = document.getElementById('langEn');
   const es = document.getElementById('langEs');
@@ -663,44 +859,21 @@ function updateHomeCount() {
 
 // ── HOME ──
 function goHome() {
-  nextToken(); // invalidate all in-flight callbacks
+  nextToken();
   breathOrb = null;
   fadeDrone(true, 1.5);
   clearBreathTimers();
   hideBackBtn();
-  fieldParticles.forEach(p => { p.targetAlpha = 0.35 + Math.random() * 0.25; p.targetClarity = 0; });
-  bgDimTgt = 1;
+  setWaveState('home');
   document.querySelectorAll('.al').forEach(a => a.classList.remove('on'));
-  // Remove any lingering overlays
   ['dec-breathe-cta'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
 
   showScreen('s-home', () => {
     document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
-    initFieldParticles(14);
     setTimeout(tryDrone, 300);
-    // Highlight most used phase
-    const mostUsed = getMostUsedPhase();
-    document.querySelectorAll('.phase-btn').forEach(b => b.classList.remove('lit'));
-    if (mostUsed) {
-      const el = document.getElementById('pb-' + mostUsed);
-      if (el) el.classList.add('lit');
-    }
   });
   applyLang();
-  // Restore day palette
   applyDawnPalette();
-}
-
-function getMostUsedPhase() {
-  const counts = {
-    notice:    parseInt(lsGet('f2_cnt_notice')    || '0'),
-    hold:      parseInt(lsGet('f2_cnt_hold')      || '0'),
-    anchor:    parseInt(lsGet('f2_cnt_anchor')    || '0'),
-    integrate: parseInt(lsGet('f2_cnt_integrate') || '0'),
-  };
-  const max = Math.max(...Object.values(counts));
-  if (max === 0) return null;
-  return Object.keys(counts).find(k => counts[k] === max);
 }
 
 // ── ENTER — what are you holding? ──
@@ -869,15 +1042,7 @@ function launchNotice() {
   setText('fwdNotice',  t.continueBtn);
   setText('skipNotice', t.skipBtn);
 
-  // Particle convergence toward centre
-  fieldParticles.forEach(p => {
-    p.targetCx      = 0.48 + Math.random() * 0.04;
-    p.targetCy      = 0.46 + Math.random() * 0.06;
-    p.targetAlpha   = 0.22 + Math.random() * 0.18;
-    p.targetClarity = 0;
-    p.phV *= 0.5;
-  });
-
+  setWaveState('notice');
   showBackBtn(() => goHome());
   showScreen('s-notice', () => {
     document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
@@ -922,15 +1087,9 @@ function launchHold() {
   setText('fwdHold',  t.continueBtn);
   setText('skipHold', t.skipBtn);
 
-  // Particles slow, gather tighter
-  fieldParticles.forEach(p => {
-    p.phV         *= 0.3;
-    p.targetAlpha  = 0.15 + Math.random() * 0.12;
-  });
-
+  setWaveState('hold');
   showBackBtn(() => goHome());
   showScreen('s-hold', () => {
-    // Fetch hold reflection after a breath
     setTimeout(() => fetchHoldReflection(tok), 2800);
   });
 }
@@ -1008,15 +1167,7 @@ function launchAnchor() {
   const fwd = document.getElementById('fwdAnchor');
   if (fwd) { fwd.style.opacity='0'; fwd.style.pointerEvents='none'; }
 
-  // Particles begin to organise — two clusters toward polarity
-  fieldParticles.forEach((p, i) => {
-    const side = i % 2 === 0;
-    p.targetCx    = side ? 0.32 : 0.68;
-    p.targetCy    = 0.45;
-    p.targetAlpha = 0.28 + Math.random() * 0.18;
-    p.hue         = side ? 'rose' : 'violet';
-  });
-
+  setWaveState('anchor');
   showBackBtn(() => goHome());
   showScreen('s-anchor', () => {
     // Stagger polarity reveal
@@ -1067,7 +1218,7 @@ function startBreath() {
   const startX = innerWidth  * 0.5;
   const startY = innerHeight * 0.5;
 
-  fieldParticles.forEach(p => { p.targetAlpha = 0; });
+  setWaveState('breath');
 
   breathOrb = new BreathOrb(startX, startY);
   breathOrb.wordText        = chosenFrequency || currentContraction;
@@ -1164,17 +1315,7 @@ function launchIntegrate() {
   breathOrb = null;
   clearBreathTimers();
 
-  // Particles gently reorganise — a loose constellation
-  fieldParticles.forEach((p, i) => {
-    const angle = (Math.PI * 2 / fieldParticles.length) * i;
-    const r     = 0.18 + Math.random() * 0.12;
-    p.targetCx      = 0.5 + Math.cos(angle) * r;
-    p.targetCy      = 0.46 + Math.sin(angle) * r;
-    p.targetAlpha   = 0.22 + Math.random() * 0.18;
-    p.targetClarity = 0.1;
-    p.phV = 0.0015 + Math.random() * 0.001; // very slow, almost still
-  });
-
+  setWaveState('integrate');
   setText('pname-integrate', t.integrateLabel.toUpperCase());
 
   // Witnessed sentence
@@ -1339,7 +1480,7 @@ function applyDawnPalette() {
 if (fontLarge) document.body.classList.add('fs-large');
 applyDawnPalette();
 applyLang();
-initFieldParticles(14);
+setWaveState('home');
 tryDrone();
 document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
 updateHomeCount();

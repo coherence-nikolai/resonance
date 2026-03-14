@@ -288,95 +288,45 @@ b, strong { font-weight: 400; }
   letter-spacing: .22em;
   color: var(--rose);
   line-height: 1;
-  margin-bottom: 8px;
+  margin-bottom: clamp(48px,12vw,72px);
   animation: fieldBreathe 7s ease-in-out infinite;
   font-style: italic;
 }
 
-.field-arrival {
-  font-family: var(--serif);
-  font-size: clamp(15px,3.8vw,19px);
-  font-style: italic;
-  color: var(--cream-dim);
-  letter-spacing: .04em;
-  margin-bottom: clamp(32px,7vw,52px);
-  text-align: center;
-  line-height: 1.5;
-}
-
-/* 2×2 phase grid */
-.phases {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: clamp(10px,3vw,18px);
-  width: 100%;
-  max-width: 340px;
-  margin-bottom: clamp(20px,5vw,32px);
-}
-
-.phase-btn {
+/* Single entry — the question is the button */
+.home-enter-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: clamp(18px,5vw,26px) 12px;
-  background: rgba(237,224,212,.03);
-  border: 1px solid rgba(152,128,184,.14);
-  border-radius: 20px;
+  gap: 14px;
+  background: none;
+  border: none;
   cursor: pointer;
+  padding: 20px 28px;
   -webkit-tap-highlight-color: transparent;
-  transition: background .3s ease, border-color .3s ease, transform .25s ease;
-  position: relative;
-  overflow: hidden;
+  margin-bottom: clamp(48px,12vw,72px);
+  max-width: 320px;
 }
-.phase-btn::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: radial-gradient(circle at 50% 40%, rgba(152,128,184,.08) 0%, transparent 70%);
-  opacity: 0;
-  transition: opacity .4s ease;
-}
-.phase-btn:hover::before, .phase-btn:active::before { opacity: 1; }
-.phase-btn:active { transform: scale(.96); }
-.phase-btn.lit {
-  border-color: rgba(200,130,110,.45);
-  background: rgba(200,130,110,.06);
-}
+.home-enter-btn:active { opacity: .7; }
 
-.phase-glyph {
+.home-enter-question {
   font-family: var(--serif);
-  font-size: clamp(26px,7vw,36px);
-  color: rgba(152,128,184,.72);
-  line-height: 1;
-  transition: color .4s ease, text-shadow .4s ease;
-}
-.phase-btn:hover .phase-glyph,
-.phase-btn.lit .phase-glyph {
-  color: var(--rose);
-  text-shadow: 0 0 20px rgba(200,130,110,.4);
+  font-size: clamp(24px,6.5vw,36px);
+  font-weight: 300;
+  font-style: italic;
+  color: var(--cream-dim);
+  letter-spacing: .04em;
+  line-height: 1.5;
+  text-align: center;
+  animation: fieldBreathe 9s ease-in-out infinite;
 }
 
-.phase-label {
+.home-enter-sub {
   font-family: var(--sans);
   font-size: clamp(11px,2.8vw,13px);
-  letter-spacing: .14em;
-  color: rgba(237,224,212,.65);
+  letter-spacing: .22em;
+  color: rgba(152,128,184,.45);
   text-transform: uppercase;
-  font-weight: 300;
-  transition: color .4s ease;
-}
-.phase-btn:hover .phase-label,
-.phase-btn.lit .phase-label { color: var(--cream-dim); }
-
-.phase-hint {
-  font-family: var(--serif);
-  font-size: clamp(11px,2.8vw,13px);
-  font-style: italic;
-  color: rgba(200,130,110,.55);
-  text-align: center;
-  line-height: 1.4;
-  padding: 0 4px;
 }
 
 /* Home bottom row */
@@ -426,9 +376,13 @@ b, strong { font-weight: 400; }
 
 /* ── ENTER SCREEN — the river begins ── */
 #s-enter {
-  justify-content: center;
-  gap: clamp(24px,6vw,40px);
+  justify-content: flex-start;
+  gap: 0;
   text-align: center;
+  padding-top: clamp(70px,16vw,90px);
+  padding-bottom: 100px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .enter-title {
@@ -437,6 +391,7 @@ b, strong { font-weight: 400; }
   letter-spacing: .24em;
   color: var(--rose-dim);
   text-transform: uppercase;
+  margin-bottom: 20px;
 }
 
 .enter-question {
@@ -447,6 +402,7 @@ b, strong { font-weight: 400; }
   color: var(--cream-dim);
   line-height: 1.5;
   max-width: 300px;
+  margin-bottom: 28px;
 }
 
 .enter-input-wrap {
@@ -455,7 +411,7 @@ b, strong { font-weight: 400; }
   align-items: center;
   gap: 14px;
   width: 100%;
-  max-width: 320px;
+  max-width: 340px;
 }
 
 .enter-input {
@@ -479,18 +435,24 @@ b, strong { font-weight: 400; }
 
 .enter-or {
   font-size: var(--fl);
-  color: var(--cream-ghost);
-  letter-spacing: .12em;
+  color: rgba(237,224,212,.28);
+  letter-spacing: .18em;
+}
+
+/* Contraction grid — scrollable field of states */
+.contraction-scroll {
+  width: 100%;
+  max-width: 340px;
 }
 
 /* Contraction grid — what people carry in */
 .contraction-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   justify-content: center;
   width: 100%;
-  max-width: 340px;
+  padding-bottom: 8px;
 }
 .contraction-pill {
   font-family: var(--serif);
@@ -519,17 +481,24 @@ b, strong { font-weight: 400; }
 }
 
 .enter-continue {
+  position: fixed;
+  bottom: 32px;
+  left: 50%; transform: translateX(-50%);
   font-family: var(--sans);
   font-size: var(--fl);
   letter-spacing: .14em;
   color: var(--rose-dim);
-  background: none; border: none;
+  background: rgba(8,6,16,.92);
+  border: 1px solid rgba(200,130,110,.2);
+  border-radius: 999px;
   cursor: pointer;
-  padding: 12px 28px; min-height: 44px;
+  padding: 14px 36px; min-height: 52px;
   -webkit-tap-highlight-color: transparent;
-  transition: color .4s ease;
+  transition: color .4s ease, border-color .4s ease, opacity .4s ease;
   opacity: 0; pointer-events: none;
   animation: pulse 2.8s ease-in-out infinite;
+  z-index: 50;
+  white-space: nowrap;
 }
 .enter-continue.ready { opacity: 1; pointer-events: all; }
 
@@ -1009,30 +978,11 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
 <!-- HOME -->
 <div class="screen active" id="s-home">
   <div class="field-wordmark">Field</div>
-  <div class="field-arrival" id="homeArrival"></div>
 
-  <div class="phases">
-    <div class="phase-btn" id="pb-notice" onclick="startNotice()">
-      <div class="phase-glyph">◌</div>
-      <div class="phase-label" id="lbl-notice"></div>
-      <div class="phase-hint" id="hint-notice"></div>
-    </div>
-    <div class="phase-btn" id="pb-hold" onclick="startHold()">
-      <div class="phase-glyph">◯</div>
-      <div class="phase-label" id="lbl-hold"></div>
-      <div class="phase-hint" id="hint-hold"></div>
-    </div>
-    <div class="phase-btn" id="pb-anchor" onclick="startAnchor()">
-      <div class="phase-glyph">⌾</div>
-      <div class="phase-label" id="lbl-anchor"></div>
-      <div class="phase-hint" id="hint-anchor"></div>
-    </div>
-    <div class="phase-btn" id="pb-integrate" onclick="startIntegrate()">
-      <div class="phase-glyph">·</div>
-      <div class="phase-label" id="lbl-integrate"></div>
-      <div class="phase-hint" id="hint-integrate"></div>
-    </div>
-  </div>
+  <button class="home-enter-btn" id="homeEnterBtn" onclick="startNotice()">
+    <span class="home-enter-question" id="homeArrival"></span>
+    <span class="home-enter-sub" id="homeArrivalSub"></span>
+  </button>
 
   <div class="home-bottom">
     <div class="home-count" id="homeCount"></div>
@@ -1052,8 +1002,10 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
     <input class="enter-input" id="enterInput" type="text"
       autocomplete="off" autocorrect="off" autocapitalize="off"
       spellcheck="false" />
-    <div class="enter-or" id="enterOr">· · ·</div>
-    <div class="contraction-grid" id="contractionGrid"></div>
+    <div class="enter-or" id="enterOr"></div>
+    <div class="contraction-scroll">
+      <div class="contraction-grid" id="contractionGrid"></div>
+    </div>
   </div>
 
   <button class="enter-continue" id="enterContinue" onclick="confirmEntry()"></button>
