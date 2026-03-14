@@ -898,11 +898,57 @@ function updateHomeCount() {
       s = (lastVisit === yesterday) ? streak + 1 : 1;
       lsSet('f2_streak', s); lsSet('f2_last_visit', today);
     }
-    // Field-language: noticing not counting
     let txt = t.sessionCount(n);
     if (s >= 3) txt += `  ·  ${t.streakLabel(s)}`;
     el.textContent = txt;
   } else { el.textContent = ''; }
+  // Update pattern mirror
+  setTimeout(updatePatternMirror, 800);
+}
+
+function updatePatternMirror() {
+  const el = document.getElementById('homePattern');
+  if (!el) return;
+  try {
+    const raw = lsGet('f2_sessions_log');
+    if (!raw) return;
+    const log = JSON.parse(raw);
+    if (log.length < 3) return;
+
+    // Count contraction frequency
+    const counts = {};
+    log.forEach(s => {
+      if (s.contraction) counts[s.contraction] = (counts[s.contraction]||0) + 1;
+    });
+
+    // Find most visited
+    const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+    if (!sorted.length) return;
+
+    const [top, topCount] = sorted[0];
+    const displayName = CONTRACTIONS[lang][CONTRACTIONS.en.indexOf(top)] || top;
+
+    // Find something that's shifted — was frequent, now absent
+    const recent = log.slice(-3).map(s => s.contraction);
+    const shifted = Object.entries(counts).find(([k,v]) => v >= 3 && !recent.includes(k));
+
+    let msg = '';
+    if (shifted) {
+      const shiftedName = CONTRACTIONS[lang][CONTRACTIONS.en.indexOf(shifted[0])] || shifted[0];
+      msg = lang === 'en'
+        ? `${shiftedName} has been quiet lately.`
+        : `${shiftedName} ha estado callado últimamente.`;
+    } else if (topCount >= 3) {
+      msg = lang === 'en'
+        ? `you've brought ${displayName} here ${topCount} times.`
+        : `has traído ${displayName} aquí ${topCount} veces.`;
+    }
+
+    if (msg) {
+      el.textContent = msg;
+      setTimeout(() => el.classList.add('visible'), 100);
+    }
+  } catch(e) {}
 }
 
 // ── HOME ──
@@ -1819,21 +1865,49 @@ function playIntroAnimation() {
     drawIntroWave(iRose);
     drawIntroWave(iViolet);
 
-    // "Resonance" name reveal — fades in as synchronisation peaks
+    // ── TEXT MOMENTS ──
+    // Moment 1: "what you hold" — appears as rose wave fades in
+    const t1p = Math.min(1, Math.max(0, (p - 0.10) / 0.08));
+    const t1fade = p > 0.28 ? Math.max(0, 1 - (p-0.28)/0.10) : 1;
+    if (t1p > 0.01) {
+      ic.save();
+      ic.globalAlpha = t1p * t1fade * 0.82;
+      ic.font = `300 italic ${Math.min(W*0.065, 28)}px 'Cormorant Garamond', Georgia, serif`;
+      ic.textAlign = 'center'; ic.textBaseline = 'middle';
+      ic.fillStyle = `rgba(200,130,110,1)`;
+      ic.shadowColor = 'rgba(200,130,110,0.4)'; ic.shadowBlur = 12;
+      ic.fillText(lang === 'en' ? 'what you hold' : 'lo que sostienes', W*0.5, H * WAVE_TOP_FRAC);
+      ic.restore();
+    }
+
+    // Moment 2: "what is also true" — appears as violet wave fades in
+    const t2p = Math.min(1, Math.max(0, (p - 0.28) / 0.08));
+    const t2fade = p > 0.48 ? Math.max(0, 1 - (p-0.48)/0.10) : 1;
+    if (t2p > 0.01) {
+      ic.save();
+      ic.globalAlpha = t2p * t2fade * 0.78;
+      ic.font = `300 italic ${Math.min(W*0.065, 28)}px 'Cormorant Garamond', Georgia, serif`;
+      ic.textAlign = 'center'; ic.textBaseline = 'middle';
+      ic.fillStyle = `rgba(152,128,184,1)`;
+      ic.shadowColor = 'rgba(152,128,184,0.4)'; ic.shadowBlur = 12;
+      ic.fillText(lang === 'en' ? 'what is also true' : 'lo que también es verdad', W*0.5, H * WAVE_BOT_FRAC);
+      ic.restore();
+    }
+
+    // Moment 3: "Resonance" — name reveal at synchronisation
     const nameP = Math.min(1, Math.max(0, (p - 0.78) / 0.10));
     const nameFade = p > 0.90 ? Math.max(0, 1 - (p-0.90)/0.08) : 1;
     if (nameP > 0.01) {
       const nameAlpha = nameP * nameFade;
       ic.save();
       const fs = Math.min(W * 0.14, 64);
-      ic.font = `300 ${fs}px 'Cormorant Garamond', Georgia, serif`;
-      ic.textAlign    = 'center';
-      ic.textBaseline = 'middle';
       ic.globalAlpha  = nameAlpha;
       ic.shadowColor  = `rgba(200,130,110,${(nameAlpha * 0.6).toFixed(2)})`;
       ic.shadowBlur   = 28;
       ic.fillStyle    = `rgba(200,130,110,1)`;
       ic.font         = `300 italic ${fs}px 'Cormorant Garamond', Georgia, serif`;
+      ic.textAlign    = 'center';
+      ic.textBaseline = 'middle';
       ic.fillText('Resonance', W * 0.5, H * 0.5);
       ic.restore();
     }

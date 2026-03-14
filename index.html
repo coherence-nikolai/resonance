@@ -392,6 +392,21 @@ b, strong { font-weight: 400; }
   max-width: 340px;
 }
 
+.home-pattern {
+  font-family: var(--serif);
+  font-size: clamp(15px,3.8vw,19px);
+  font-style: italic;
+  color: var(--thread);
+  text-align: center;
+  letter-spacing: .03em;
+  line-height: 1.6;
+  max-width: 88vw;
+  min-height: 1em;
+  opacity: 0;
+  transition: opacity 2s ease;
+}
+.home-pattern.visible { opacity: 1; }
+
 .home-count {
   font-size: var(--fl);
   color: rgba(200,130,110,.55);
@@ -511,9 +526,9 @@ b, strong { font-weight: 400; }
   font-family: var(--serif);
   font-size: clamp(22px,5.5vw,28px);
   font-style: italic;
-  color: rgba(200,130,110,.75);
-  background: rgba(200,130,110,.06);
-  border: 1px solid rgba(200,130,110,.22);
+  color: rgba(237,200,180,.92);
+  background: rgba(200,130,110,.13);
+  border: 1px solid rgba(200,130,110,.35);
   border-radius: 999px;
   padding: 12px 24px;
   cursor: pointer;
@@ -522,9 +537,9 @@ b, strong { font-weight: 400; }
   animation: shadowAgitate var(--drift-dur, 3s) ease-in-out infinite;
 }
 .contraction-pill:hover, .contraction-pill:active {
-  background: rgba(200,130,110,.14);
-  border-color: rgba(200,130,110,.6);
-  color: var(--rose-bright);
+  background: rgba(200,130,110,.22);
+  border-color: rgba(200,130,110,.7);
+  color: rgba(255,230,210,1);
 }
 @keyframes shadowAgitate {
   0%,100% { transform: translate(0,0); }
@@ -1129,6 +1144,7 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
   </button>
 
   <div class="home-bottom">
+    <div class="home-pattern" id="homePattern"></div>
     <div class="home-count" id="homeCount"></div>
     <div class="home-lang-toggle">
       <button class="lang-seg" id="langEn" onclick="setLang('en')">EN</button>
