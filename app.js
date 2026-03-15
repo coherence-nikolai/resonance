@@ -384,19 +384,18 @@ class BreathOrb {
         breathP = 0.0;                              // rest — small
       }
 
-      // Radius and blur follow breathP
+      // Radius follows breathP
       tR = 9 + (this.MAX_RADIUS - 9) * breathP;
-      tB = breathP * 10;
-
-      // Glow — ALWAYS warm, blooms on exhale, never dims below 0.9
-      // exhaleGlow: 0 at start of exhale, peaks at 1 mid-exhale, back to 0 at end
+      // Blur kept very low — just enough for softness, never muddy
+      tB = breathP * 3;
+      // Glow stays warm throughout — peaks on exhale arc, never below 1.1
       let exhaleGlow = 0;
       if (cp >= hP && cp < eP) {
         const x = (cp - hP) / (eP - hP);
-        exhaleGlow = Math.sin(x * Math.PI); // smooth 0→1→0 arc during exhale
+        exhaleGlow = Math.sin(x * Math.PI);
       }
-      const cycleBonus = Math.min(this.cycleCount / this.maxCycles, 1) * 0.6;
-      tG = 0.9 + (0.7 + cycleBonus) * exhaleGlow;
+      const cycleBonus = Math.min(this.cycleCount / this.maxCycles, 1) * 0.7;
+      tG = 1.1 + (0.8 + cycleBonus) * exhaleGlow;
 
       // Drive wave positions directly from breathP — no phase change events needed
       if (typeof waveRoseYTgt !== 'undefined') {
