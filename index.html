@@ -311,6 +311,20 @@ b, strong { font-weight: 400; }
 }
 .intro-skip.visible { opacity: 1; pointer-events: all; cursor: pointer; }
 
+.intro-lang {
+  position: absolute;
+  bottom: clamp(80px,16vw,100px);
+  left: 50%; transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(152,128,184,.18);
+  border-radius: 999px;
+  background: rgba(8,6,16,.6);
+  z-index: 20;
+}
+
 /* Revisit glyph on home screen */
 .intro-glyph {
   font-family: var(--sans);
@@ -448,7 +462,7 @@ b, strong { font-weight: 400; }
   gap: 0;
   text-align: center;
   padding-top: calc(var(--wave-top) + 24px);
-  padding-bottom: calc(var(--wave-bot) + 80px);
+  padding-bottom: calc(var(--wave-bot) + 120px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -598,20 +612,25 @@ b, strong { font-weight: 400; }
   font-family: var(--sans);
   font-size: var(--fl);
   letter-spacing: .14em;
-  color: var(--rose-dim);
-  background: rgba(8,6,16,.92);
-  border: 1px solid rgba(200,130,110,.2);
+  color: rgba(237,200,175,.95);
+  background: rgba(18,10,24,.96);
+  border: 1px solid rgba(200,130,110,.55);
   border-radius: 999px;
   cursor: pointer;
-  padding: 14px 36px; min-height: 52px;
+  padding: 16px 44px; min-height: 56px;
   -webkit-tap-highlight-color: transparent;
-  transition: color .4s ease, border-color .4s ease, opacity .4s ease;
+  transition: color .4s ease, border-color .4s ease, opacity .4s ease, box-shadow .4s ease;
   opacity: 0; pointer-events: none;
   animation: pulse 2.8s ease-in-out infinite;
   z-index: 50;
   white-space: nowrap;
+  box-shadow: 0 0 24px rgba(200,130,110,.18);
 }
 .enter-continue.ready { opacity: 1; pointer-events: all; }
+.enter-continue.ready:hover {
+  border-color: rgba(200,130,110,.85);
+  box-shadow: 0 0 32px rgba(200,130,110,.30);
+}
 
 /* ── PHASE SCREENS — Notice, Hold, Anchor, Integrate ── */
 .phase-screen {
@@ -1133,6 +1152,10 @@ body.fs-large .enter-question { font-size: clamp(26px,7vw,40px); }
 <!-- INTRO ANIMATION SCREEN -->
 <div class="screen active" id="s-intro">
   <canvas class="intro-canvas" id="introCanvas"></canvas>
+  <div class="intro-lang">
+    <button class="lang-seg" id="introLangEn" onclick="setLang('en');updateIntroLang()">EN</button>
+    <button class="lang-seg" id="introLangEs" onclick="setLang('es');updateIntroLang()">ES</button>
+  </div>
   <div class="intro-skip" id="introSkip">tap to enter</div>
 </div>
 

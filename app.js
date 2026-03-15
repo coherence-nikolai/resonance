@@ -328,7 +328,7 @@ class BreathOrb {
     this.wordColorPhase   = 0;
     this.wordScale        = 1;
     this.morphStartY      = 0;
-    this.MORPH_DURATION   = 2600;
+    this.MORPH_DURATION   = 3500; // longer for full-screen bloom
     this.MORPH_LIFT       = innerHeight * 0.52;
     // Rose/warm palette — orb holds what you carry
     this.c1 = '220,150,120'; this.c2 = '200,120,90';
@@ -357,19 +357,25 @@ class BreathOrb {
       const p    = Math.min(t / this.INHALE, 1);
       const ease = 1 - Math.pow(1 - p, 3);
       tR = 9 + (this.MAX_RADIUS - 9) * ease;
-      tB = 0 + 14 * ease; tG = 1 - 0.5 * ease;
+      tB = 0 + 12 * ease;
+      // Glow dims continuously on inhale — going inward
+      tG = 1.1 - 0.65 * ease;
       if (t > this.INHALE) { this.ripples.push({r: this.dispRadius * 0.8, alpha: 0.5}); this.startPhase('hold'); }
 
     } else if (this.phase === 'hold') {
-      tR = this.MAX_RADIUS; tB = 13; tG = 0.48;
+      tR = this.MAX_RADIUS; tB = 12;
+      // Suspended — glow at its dimmest
+      tG = 0.45;
       if (t > this.HOLD) this.startPhase('exhale');
 
     } else if (this.phase === 'exhale') {
       const p    = Math.min(t / this.EXHALE, 1);
       const ease = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2,2)/2;
       tR = this.MAX_RADIUS - (this.MAX_RADIUS - 12) * ease;
-      tB = 13 - 13 * ease;
-      tG = 0.48 + (1.2 + this.cycleCount * (this.cycleCount === 2 ? 1.1 : 0.35)) * ease;
+      tB = 12 - 12 * ease;
+      // Glow brightens continuously on exhale — coming outward
+      const brightBonus = this.cycleCount === 2 ? 0.9 : this.cycleCount === 1 ? 0.5 : 0.2;
+      tG = 0.45 + (0.85 + brightBonus) * ease;
       if (t < 60 && this.ripples.length === 0) this.ripples.push({r: 18, alpha: 0.7});
       if (t > this.EXHALE) {
         this.cycleCount++;
@@ -380,9 +386,10 @@ class BreathOrb {
       }
 
     } else if (this.phase === 'rest') {
+      // Bridge smoothly — tG eases toward inhale start value
       tR = this.dispRadius * 0.88 + 11 * 0.12;
-      tB = this.dispBlur * 0.85;
-      tG = 1.1;
+      tB = this.dispBlur * 0.80;
+      tG = 1.05;
       if (t > this.REST) this.startPhase('inhale');
 
     } else if (this.phase === 'crystallised') {
@@ -391,16 +398,16 @@ class BreathOrb {
       this.wordGlowIntensity = 1;
 
     } else if (this.phase === 'morph') {
-      // Bloom outward and dissolve — no upward movement
+      // Full-screen bloom — expands to fill, rose-violet blend, then dissolves
       const p    = Math.min(t / this.MORPH_DURATION, 1);
-      const ease = p < 0.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
-      // Expand radius outward
-      tR = 12 + (this.MAX_RADIUS * 0.8) * ease;
-      tB = ease * 18; // bloom blur
-      tG = (1.5 - ease * 1.5); // fade glow to zero
-      this.alpha = 1 - ease; // fade alpha
-      this.wordScale = 1 - ease;
-      // No y movement — stays in place
+      const ease = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2,2)/2;
+      const FULL = Math.max(innerWidth, innerHeight) * 0.85;
+      tR = 12 + (FULL - 12) * ease;  // expand to near full screen
+      tB = ease * 28;                  // heavy blur at peak
+      // Hold glow bright until 70% then fade
+      tG = p < 0.7 ? 1.8 : 1.8 * (1 - (p - 0.7) / 0.3);
+      this.alpha = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4; // fade alpha from 60% onward
+      this.wordScale = Math.max(0, 1 - ease * 1.4);
       if (t > this.MORPH_DURATION) {
         this.phase = 'done';
         if (this.onMorphDone) this.onMorphDone();
@@ -873,6 +880,7 @@ function setLang(l) {
   lsSet('f2_lang', lang);
   applyLang();
   updateSettingsUI();
+  updateIntroLang();
 }
 function applyLang() {
   document.documentElement.lang = lang;
@@ -1789,9 +1797,11 @@ function playIntroAnimation() {
   const W = innerWidth, H = innerHeight;
   const TOTAL = 1500; // frames ~25s at 60fps
 
-  // Two wave objects — start at exact home positions so transition is seamless
-  const iRose   = { phase: 0, phaseV: 0.022, amp: 0.055, y: WAVE_TOP_FRAC, color: '200,130,110', alpha: 0 };
-  const iViolet = { phase: Math.PI*0.6, phaseV: 0.028, amp: 0.050, y: WAVE_BOT_FRAC, color: '152,128,184', alpha: 0 };
+  // Two wave objects — at 25%/75% so both visible, ease to home positions at end
+  const INTRO_ROSE_Y   = 0.25;
+  const INTRO_VIOLET_Y = 0.75;
+  const iRose   = { phase: 0, phaseV: 0.022, amp: 0.055, y: INTRO_ROSE_Y,   color: '200,130,110', alpha: 0 };
+  const iViolet = { phase: Math.PI*0.6, phaseV: 0.028, amp: 0.050, y: INTRO_VIOLET_Y, color: '152,128,184', alpha: 0 };
 
   function drawIntroWave(wave) {
     const centreY = wave.y * H;
@@ -1870,6 +1880,13 @@ function playIntroAnimation() {
       ic.restore();
     }
 
+    // Waves stay at 25%/75% then ease to home positions during final crossfade
+    if (p > 0.88) {
+      const ease = Math.min(1, (p - 0.88) / 0.12);
+      iRose.y   = INTRO_ROSE_Y   + (WAVE_TOP_FRAC - INTRO_ROSE_Y)   * ease;
+      iViolet.y = INTRO_VIOLET_Y + (WAVE_BOT_FRAC - INTRO_VIOLET_Y) * ease;
+    }
+
     drawIntroWave(iRose);
     drawIntroWave(iViolet);
 
@@ -1902,21 +1919,31 @@ function playIntroAnimation() {
       ic.restore();
     }
 
-    // Moment 3: "Resonance" — name reveal at synchronisation
-    const nameP = Math.min(1, Math.max(0, (p - 0.78) / 0.10));
+    // Moment 3: "Resonance" — slow cinematic bloom, scale from 0.88 to 1.0
+    const nameP = Math.min(1, Math.max(0, (p - 0.72) / 0.16)); // slower fade in
     const nameFade = p > 0.90 ? Math.max(0, 1 - (p-0.90)/0.08) : 1;
     if (nameP > 0.01) {
       const nameAlpha = nameP * nameFade;
+      const scale = 0.88 + nameP * 0.12; // grows from 0.88→1.0
       ic.save();
       const fs = Math.min(W * 0.14, 64);
       ic.globalAlpha  = nameAlpha;
-      ic.shadowColor  = `rgba(200,130,110,${(nameAlpha * 0.6).toFixed(2)})`;
-      ic.shadowBlur   = 28;
-      ic.fillStyle    = `rgba(200,130,110,1)`;
+      // Glow bloom — expands as title arrives
+      const glowR = Math.min(W,H) * (0.15 + nameP * 0.25);
+      const gg = ic.createRadialGradient(W*0.5, H*0.5, 0, W*0.5, H*0.5, glowR);
+      gg.addColorStop(0,  `rgba(220,150,110,${(nameAlpha*0.35).toFixed(3)})`);
+      gg.addColorStop(1,  'rgba(200,130,110,0)');
+      ic.fillStyle = gg; ic.fillRect(0,0,W,H);
+      // Title text with scale
+      ic.translate(W*0.5, H*0.5);
+      ic.scale(scale, scale);
+      ic.shadowColor  = `rgba(200,130,110,${(nameAlpha * 0.7).toFixed(2)})`;
+      ic.shadowBlur   = 32 + nameP * 20;
+      ic.fillStyle    = `rgba(220,170,140,1)`;
       ic.font         = `300 italic ${fs}px 'Cormorant Garamond', Georgia, serif`;
       ic.textAlign    = 'center';
       ic.textBaseline = 'middle';
-      ic.fillText('Resonance', W * 0.5, H * 0.5);
+      ic.fillText('Resonance', 0, 0);
       ic.restore();
     }
 
@@ -1940,32 +1967,49 @@ function playIntroAnimation() {
     }
   }
 
-  // Tap to skip — fade out gracefully
+  // Tap triggers audio (iOS gesture requirement) + optional skip
+  let audioStarted = false;
   let skipping = false;
-  const onSkip = () => {
-    if (skipping) return;
-    skipping = true;
-    // Fade canvas to black over 400ms then end
-    let fadeT = 0;
-    const fadeOut = () => {
-      fadeT++;
-      const f = Math.min(1, fadeT / 24);
-      ic.save(); ic.globalAlpha = f; ic.fillStyle = '#080610';
-      ic.fillRect(0, 0, W, H); ic.restore();
-      if (f < 1) requestAnimationFrame(fadeOut);
-      else endIntroAnimation();
-    };
-    if (introAnimFrame) { cancelAnimationFrame(introAnimFrame); introAnimFrame = null; }
-    requestAnimationFrame(fadeOut);
+
+  const onTap = (e) => {
+    // Start audio on first tap regardless
+    if (!audioStarted) {
+      audioStarted = true;
+      initAudio();
+      resumeAudio();
+      setTimeout(() => playIntroAudio(), 100);
+    }
+    // Only skip if past the 2s mark
+    if (t > 120 && !skipping) {
+      skipping = true;
+      let fadeT = 0;
+      const fadeOut = () => {
+        fadeT++;
+        const f = Math.min(1, fadeT / 24);
+        ic.save(); ic.globalAlpha = f; ic.fillStyle = '#080610';
+        ic.fillRect(0, 0, W, H); ic.restore();
+        if (f < 1) requestAnimationFrame(fadeOut);
+        else endIntroAnimation();
+      };
+      if (introAnimFrame) { cancelAnimationFrame(introAnimFrame); introAnimFrame = null; }
+      requestAnimationFrame(fadeOut);
+    }
   };
-  screen.addEventListener('click',    onSkip, {once: true});
-  screen.addEventListener('touchend', onSkip, {once: true, passive: true});
+  screen.addEventListener('click',    onTap, {passive: true});
+  screen.addEventListener('touchend', onTap, {passive: true});
 
-  // Audio
-  playIntroAudio();
-
-  // Start loop
+  // Start loop immediately
   introAnimFrame = requestAnimationFrame(introLoop);
+}
+
+function updateIntroLang() {
+  const en = document.getElementById('introLangEn');
+  const es = document.getElementById('introLangEs');
+  if (en) en.classList.toggle('active', lang === 'en');
+  if (es) es.classList.toggle('active', lang === 'es');
+  // Update skip hint text
+  const skip = document.getElementById('introSkip');
+  if (skip) skip.textContent = lang === 'en' ? 'tap to enter' : 'toca para entrar';
 }
 
 function playIntroAudio() {
