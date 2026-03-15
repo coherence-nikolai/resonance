@@ -2211,9 +2211,9 @@ function playIntroAnimation() {
       ic.restore();
     }
 
-    // Text fades in — starts later, steeper curve so early frames truly invisible
-    const nameP = Math.min(1, Math.max(0, (p-0.76)/0.18));
-    const nameAlphaCurved = Math.pow(nameP, 3.5) * nameFade;
+    // Text fades in — linear over 0.10, exactly mirrors the fade-out pace
+    const nameP = Math.min(1, Math.max(0, (p-0.78)/0.10));
+    const nameAlphaCurved = nameP * nameFade;
 
     if (nameAlphaCurved > 0.002) {
       const scale = 0.92 + nameP * 0.08;
