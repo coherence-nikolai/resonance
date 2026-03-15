@@ -2211,11 +2211,9 @@ function playIntroAnimation() {
       ic.restore();
     }
 
-    // Text fades in very gradually — starts at p=0.72, takes 4s to reach full opacity
-    // First frames nearly invisible so there's no sudden pop
-    const nameP = Math.min(1, Math.max(0, (p-0.72)/0.22));
-    // Apply cubic ease so early frames are extremely faint
-    const nameAlphaCurved = Math.pow(nameP, 2.5) * nameFade;
+    // Text fades in — starts later, steeper curve so early frames truly invisible
+    const nameP = Math.min(1, Math.max(0, (p-0.76)/0.18));
+    const nameAlphaCurved = Math.pow(nameP, 3.5) * nameFade;
 
     if (nameAlphaCurved > 0.002) {
       const scale = 0.92 + nameP * 0.08;
