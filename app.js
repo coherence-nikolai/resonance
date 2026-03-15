@@ -358,43 +358,56 @@ class BreathOrb {
 
     } else if (this.phase === 'inhale' || this.phase === 'hold' ||
                this.phase === 'exhale' || this.phase === 'rest') {
-      // ── CONTINUOUS BREATH — pure sin curve, no modulo, no jumps ──
+      // ── CONTINUOUS BREATH — clean, simple, warm throughout ──
       const CYCLE = this.INHALE + this.HOLD + this.EXHALE + this.REST;
       if (this.breathClock === undefined) this.breathClock = 0;
-      this.breathClock += 16; // never reset — runs forever
+      this.breathClock += 16;
 
-      // Position within current cycle (0→1), no modulo discontinuity
       const cyclesSoFar = Math.floor(this.breathClock / CYCLE);
       const ct  = this.breathClock - cyclesSoFar * CYCLE;
       const cp  = ct / CYCLE;
       const iP  = this.INHALE / CYCLE;
-      const hP  = (this.INHALE + this.HOLD) / CYCLE;
+      const hP  = (this.INHALE + this.HOLD)  / CYCLE;
       const eP  = (this.INHALE + this.HOLD + this.EXHALE) / CYCLE;
 
-      // breathP: 0=contracted/bright, 1=expanded/dim
+      // breathP: 0=small/contracted, 1=large/expanded
       let breathP;
       if (cp < iP) {
         const x = cp / iP;
-        breathP = 1 - Math.pow(1 - x, 2.5);
+        breathP = 1 - Math.pow(1 - x, 2.5);      // ease in
       } else if (cp < hP) {
-        breathP = 1.0;
+        breathP = 1.0;                              // hold at full
       } else if (cp < eP) {
         const x = (cp - hP) / (eP - hP);
-        breathP = 1 - (x < 0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2);
+        breathP = 1 - (x < 0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2); // ease out
       } else {
-        breathP = Math.max(0, 1 - (cp - eP) / (1 - eP)) * 0.04;
+        breathP = 0.0;                              // rest — small
       }
 
+      // Radius and blur follow breathP
       tR = 9 + (this.MAX_RADIUS - 9) * breathP;
-      tB = breathP * 11;
-      // Glow only ever bright — floor 0.85, peaks on exhale, grows each cycle
-      const cycleBonus = Math.min(this.cycleCount / this.maxCycles, 1) * 0.7;
-      const exhaleP = cp > hP ? Math.min(1, (cp - hP) / (eP - hP)) : 0;
-      tG = 0.85 + (0.65 + cycleBonus) * exhaleP;
+      tB = breathP * 10;
 
-      // Phase crossings — use cyclesSoFar + cp to detect transitions cleanly
-      const prevCt  = Math.max(0, this.breathClock - 16) - cyclesSoFar * CYCLE;
-      const prevCp  = Math.max(0, prevCt) / CYCLE;
+      // Glow — ALWAYS warm, blooms on exhale, never dims below 0.9
+      // exhaleGlow: 0 at start of exhale, peaks at 1 mid-exhale, back to 0 at end
+      let exhaleGlow = 0;
+      if (cp >= hP && cp < eP) {
+        const x = (cp - hP) / (eP - hP);
+        exhaleGlow = Math.sin(x * Math.PI); // smooth 0→1→0 arc during exhale
+      }
+      const cycleBonus = Math.min(this.cycleCount / this.maxCycles, 1) * 0.6;
+      tG = 0.9 + (0.7 + cycleBonus) * exhaleGlow;
+
+      // Drive wave positions directly from breathP — no phase change events needed
+      if (typeof waveRoseYTgt !== 'undefined') {
+        const depth = 0.10 + (this.cycleCount * 0.02);
+        waveRoseYTgt   = WAVE_TOP_FRAC + depth * breathP;
+        waveVioletYTgt = WAVE_BOT_FRAC - depth * breathP;
+      }
+
+      // Phase crossings for audio/text/dots
+      const prevCt = Math.max(0, this.breathClock - 16) - cyclesSoFar * CYCLE;
+      const prevCp = Math.max(0, prevCt) / CYCLE;
 
       if (prevCp > 0.96 && cp < 0.04) {
         if (this.onPhaseChange) this.onPhaseChange('inhale', this.cycleCount);
@@ -438,15 +451,7 @@ class BreathOrb {
     const ls = 0.022;
     this.dispRadius += ((tR||9)  - this.dispRadius) * ls;
     this.dispBlur   += ((tB||0)  - this.dispBlur)   * ls;
-    // Glow only moves upward — never dims, only brightens
-    const glowTarget = tG || 1;
-    if (glowTarget > this.dispGlow) {
-      this.dispGlow += (glowTarget - this.dispGlow) * ls;
-    }
-    // Slow gentle decay back to floor (0.85) only — never below
-    else {
-      this.dispGlow = Math.max(0.85, this.dispGlow - 0.004);
-    }
+    this.dispGlow   += ((tG||0.9) - this.dispGlow)  * 0.015; // slower lerp = smoother
     this.wordAlpha  += (this.wordTargetAlpha - this.wordAlpha) * 0.03;
 
     this.ripples = this.ripples.filter(rp => {
@@ -1670,11 +1675,9 @@ function startBreath() {
       bDelay(() => showBtext(cues.inhale), 300);
       hideBtext(breathOrb.INHALE - 700);
       playBreathInhale();
-      setWaveBreathPosition('inhale', cycle);
     } else if (phase === 'hold') {
       if (breathOrb) breathOrb.wordTargetAlpha = 0.5;
       bDelay(() => showBtext(cues.hold), 100);
-      setWaveBreathPosition('hold', cycle);
     } else if (phase === 'exhale') {
       if (breathOrb) {
         breathOrb.wordTargetAlpha    = [0.35, 0.55, 1.0][Math.min(cycle, 2)];
@@ -1683,14 +1686,11 @@ function startBreath() {
       showBtext(cues.exhale);
       hideBtext(breathOrb.EXHALE - 700);
       playBreathExhale();
-      setWaveBreathPosition('exhale', cycle);
     } else if (phase === 'rest') {
-      setWaveBreathPosition('rest', cycle);
       const dot = document.getElementById('bdot' + (cycle - 1));
       if (dot) dot.classList.add('done');
     } else if (phase === 'crystallised') {
       if (breathOrb) { breathOrb.wordTargetAlpha = 1; breathOrb.wordGlowIntensity = 1; }
-      setWaveBreathPosition('rest', cycle);
       const dot = document.getElementById('bdot2');
       if (dot) dot.classList.add('done');
     }
@@ -1698,6 +1698,8 @@ function startBreath() {
 
   breathOrb.onCyclesDone = () => {
     breathRunning = false;
+    waveRoseYTgt   = WAVE_TOP_FRAC;
+    waveVioletYTgt = WAVE_BOT_FRAC;
     if (btext) btext.style.opacity = '0';
     bDelay(() => {
       if (!breathOrb) return;
