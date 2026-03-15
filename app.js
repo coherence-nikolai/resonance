@@ -1795,11 +1795,11 @@ function playIntroAnimation() {
 
   let t = 0;
   const W = innerWidth, H = innerHeight;
-  const TOTAL = 1500; // frames ~25s at 60fps
+  const TOTAL = 1500;
 
-  // Two wave objects — at 25%/75% so both visible, ease to home positions at end
-  const INTRO_ROSE_Y   = 0.25;
-  const INTRO_VIOLET_Y = 0.75;
+  // Waves at 30%/70% — clearly visible, in relationship, clear of edges
+  const INTRO_ROSE_Y   = 0.30;
+  const INTRO_VIOLET_Y = 0.70;
   const iRose   = { phase: 0, phaseV: 0.022, amp: 0.055, y: INTRO_ROSE_Y,   color: '200,130,110', alpha: 0 };
   const iViolet = { phase: Math.PI*0.6, phaseV: 0.028, amp: 0.050, y: INTRO_VIOLET_Y, color: '152,128,184', alpha: 0 };
 
@@ -1807,7 +1807,6 @@ function playIntroAnimation() {
     const centreY = wave.y * H;
     const amp     = wave.amp * H;
     ic.save();
-    // corona
     ic.beginPath();
     for (let i = 0; i <= W; i += 3) {
       const p = Math.sin(i*0.0016*(W/380)+wave.phase)*amp + Math.sin(i*0.0034*(W/380)+wave.phase*1.3)*amp*0.3;
@@ -1816,7 +1815,6 @@ function playIntroAnimation() {
     ic.strokeStyle = `rgba(${wave.color},${(wave.alpha*0.2).toFixed(3)})`;
     ic.lineWidth = 22; ic.lineCap = 'round';
     ic.filter = 'blur(7px)'; ic.stroke(); ic.filter = 'none';
-    // core
     ic.beginPath();
     for (let i = 0; i <= W; i += 3) {
       const p = Math.sin(i*0.0016*(W/380)+wave.phase)*amp + Math.sin(i*0.0034*(W/380)+wave.phase*1.3)*amp*0.3;
@@ -1831,133 +1829,107 @@ function playIntroAnimation() {
   function introLoop() {
     ic.clearRect(0, 0, W, H);
     t++;
-
     const p = t / TOTAL;
-
-    // ── PHASE PLAN ──
-    // 0.00–0.15  Rose fades in — independent, lively
-    // 0.18–0.35  Violet fades in — different rhythm, no relationship yet
-    // 0.35–0.60  Both slow gradually — starting to sense each other
-    // 0.60–0.80  Same speed, in phase — synchronised, still apart
-    //            Interference glow brightens between them
-    // 0.78–0.88  "Resonance" fades in at centre
-    // 0.88–1.00  Canvas fades out — crossfade to home
 
     // Alpha
     iRose.alpha   = Math.min(1, p / 0.13);
     iViolet.alpha = Math.min(1, Math.max(0, (p - 0.18) / 0.14));
 
-    // Phase velocity — waves slow together, find same rhythm
-    // Rose starts at 0.022, violet at 0.028 — different speeds
-    // By p=0.65 both settle to ~0.007 — same speed = synchronised
-    const syncP = Math.min(1, Math.max(0, (p - 0.35) / 0.30));
+    // Sync — waves find same rhythm
+    const syncP    = Math.min(1, Math.max(0, (p - 0.35) / 0.30));
     const syncEase = syncP < 0.5 ? 2*syncP*syncP : 1-Math.pow(-2*syncP+2,2)/2;
-    const roseV   = 0.022 - (0.022 - 0.007) * syncEase;
-    const violetV = 0.028 - (0.028 - 0.007) * syncEase;
-    iRose.phase   += roseV;
-    iViolet.phase += violetV;
-
-    // Waves stay at their positions — no vertical movement
-    // They are ALWAYS apart — synchronisation is about rhythm not position
-    iRose.y   = WAVE_TOP_FRAC;
-    iViolet.y = WAVE_BOT_FRAC;
-
-    // Amplitude: slightly reduces as they synchronise (steadier)
+    iRose.phase   += 0.022 - (0.015) * syncEase;
+    iViolet.phase += 0.028 - (0.021) * syncEase;
     iRose.amp   = 0.055 - 0.015 * syncEase;
     iViolet.amp = 0.050 - 0.013 * syncEase;
 
-    // Interference glow — grows as waves synchronise
-    const glowP = Math.min(1, Math.max(0, (p - 0.55) / 0.25));
-    const glowFade = p > 0.88 ? Math.max(0, 1 - (p-0.88)/0.12) : 1;
-    if (glowP > 0.05) {
-      ic.save();
-      const g = ic.createRadialGradient(W*.5, H*.5, 0, W*.5, H*.5, Math.min(W,H)*(0.25+glowP*0.3));
-      g.addColorStop(0,  `rgba(220,180,240,${(glowP*0.18*glowFade).toFixed(3)})`);
-      g.addColorStop(.5, `rgba(185,145,200,${(glowP*0.08*glowFade).toFixed(3)})`);
-      g.addColorStop(1,  'rgba(152,128,184,0)');
-      ic.fillStyle = g;
-      ic.fillRect(0, 0, W, H);
-      ic.restore();
+    // Ease waves to home positions during fadeout
+    if (p > 0.88) {
+      const e = Math.min(1, (p - 0.88) / 0.12);
+      iRose.y   = INTRO_ROSE_Y   + (WAVE_TOP_FRAC - INTRO_ROSE_Y)   * e;
+      iViolet.y = INTRO_VIOLET_Y + (WAVE_BOT_FRAC - INTRO_VIOLET_Y) * e;
     }
 
-    // Waves stay at 25%/75% then ease to home positions during final crossfade
-    if (p > 0.88) {
-      const ease = Math.min(1, (p - 0.88) / 0.12);
-      iRose.y   = INTRO_ROSE_Y   + (WAVE_TOP_FRAC - INTRO_ROSE_Y)   * ease;
-      iViolet.y = INTRO_VIOLET_Y + (WAVE_BOT_FRAC - INTRO_VIOLET_Y) * ease;
+    // Interference glow
+    const glowP    = Math.min(1, Math.max(0, (p - 0.55) / 0.25));
+    const glowFade = p > 0.85 ? Math.max(0, 1-(p-0.85)/0.13) : 1;
+    if (glowP > 0.05) {
+      ic.save();
+      const g = ic.createRadialGradient(W*.5,H*.5,0,W*.5,H*.5,Math.min(W,H)*(0.2+glowP*0.3));
+      g.addColorStop(0, `rgba(220,180,240,${(glowP*0.18*glowFade).toFixed(3)})`);
+      g.addColorStop(.5,`rgba(185,145,200,${(glowP*0.08*glowFade).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(152,128,184,0)');
+      ic.fillStyle = g; ic.fillRect(0,0,W,H); ic.restore();
     }
 
     drawIntroWave(iRose);
     drawIntroWave(iViolet);
 
-    // ── TEXT MOMENTS ──
-    // Moment 1: "what you hold" — appears as rose wave fades in
-    const t1p = Math.min(1, Math.max(0, (p - 0.10) / 0.08));
-    const t1fade = p > 0.28 ? Math.max(0, 1 - (p-0.28)/0.10) : 1;
+    // Text 1: "what you hold" — ABOVE rose wave, clear of it
+    const t1p    = Math.min(1, Math.max(0, (p-0.10)/0.08));
+    const t1fade = p > 0.28 ? Math.max(0, 1-(p-0.28)/0.10) : 1;
     if (t1p > 0.01) {
+      const textY = H * INTRO_ROSE_Y - H * 0.08; // above rose wave
       ic.save();
-      ic.globalAlpha = t1p * t1fade * 0.82;
-      ic.font = `300 italic ${Math.min(W*0.065, 28)}px 'Cormorant Garamond', Georgia, serif`;
-      ic.textAlign = 'center'; ic.textBaseline = 'middle';
-      ic.fillStyle = `rgba(200,130,110,1)`;
-      ic.shadowColor = 'rgba(200,130,110,0.4)'; ic.shadowBlur = 12;
-      ic.fillText(lang === 'en' ? 'what you hold' : 'lo que sostienes', W*0.5, H * WAVE_TOP_FRAC);
+      ic.globalAlpha = t1p * t1fade * 0.88;
+      ic.font = `300 italic ${Math.min(W*0.065,28)}px 'Cormorant Garamond',Georgia,serif`;
+      ic.textAlign='center'; ic.textBaseline='middle';
+      ic.fillStyle='rgba(200,130,110,1)';
+      ic.shadowColor='rgba(200,130,110,0.4)'; ic.shadowBlur=12;
+      ic.fillText(lang==='en'?'what you hold':'lo que sostienes', W*0.5, textY);
       ic.restore();
     }
 
-    // Moment 2: "what is also true" — appears as violet wave fades in
-    const t2p = Math.min(1, Math.max(0, (p - 0.28) / 0.08));
-    const t2fade = p > 0.48 ? Math.max(0, 1 - (p-0.48)/0.10) : 1;
+    // Text 2: "what is also true" — BELOW violet wave, clear of it
+    const t2p    = Math.min(1, Math.max(0, (p-0.28)/0.08));
+    const t2fade = p > 0.48 ? Math.max(0, 1-(p-0.48)/0.10) : 1;
     if (t2p > 0.01) {
+      const textY = H * INTRO_VIOLET_Y + H * 0.08; // below violet wave
       ic.save();
-      ic.globalAlpha = t2p * t2fade * 0.78;
-      ic.font = `300 italic ${Math.min(W*0.065, 28)}px 'Cormorant Garamond', Georgia, serif`;
-      ic.textAlign = 'center'; ic.textBaseline = 'middle';
-      ic.fillStyle = `rgba(152,128,184,1)`;
-      ic.shadowColor = 'rgba(152,128,184,0.4)'; ic.shadowBlur = 12;
-      ic.fillText(lang === 'en' ? 'what is also true' : 'lo que también es verdad', W*0.5, H * WAVE_BOT_FRAC);
+      ic.globalAlpha = t2p * t2fade * 0.82;
+      ic.font = `300 italic ${Math.min(W*0.065,28)}px 'Cormorant Garamond',Georgia,serif`;
+      ic.textAlign='center'; ic.textBaseline='middle';
+      ic.fillStyle='rgba(152,128,184,1)';
+      ic.shadowColor='rgba(152,128,184,0.4)'; ic.shadowBlur=12;
+      ic.fillText(lang==='en'?'what is also true':'lo que también es verdad', W*0.5, textY);
       ic.restore();
     }
 
-    // Moment 3: "Resonance" — slow cinematic bloom, scale from 0.88 to 1.0
-    const nameP = Math.min(1, Math.max(0, (p - 0.72) / 0.16)); // slower fade in
-    const nameFade = p > 0.90 ? Math.max(0, 1 - (p-0.90)/0.08) : 1;
+    // Text 3: Resonance — slow cinematic bloom
+    const nameP    = Math.min(1, Math.max(0, (p-0.68)/0.18));
+    const nameFade = p > 0.88 ? Math.max(0, 1-(p-0.88)/0.10) : 1;
     if (nameP > 0.01) {
       const nameAlpha = nameP * nameFade;
-      const scale = 0.88 + nameP * 0.12; // grows from 0.88→1.0
+      const scale = 0.88 + nameP * 0.12;
       ic.save();
-      const fs = Math.min(W * 0.14, 64);
-      ic.globalAlpha  = nameAlpha;
-      // Glow bloom — expands as title arrives
-      const glowR = Math.min(W,H) * (0.15 + nameP * 0.25);
-      const gg = ic.createRadialGradient(W*0.5, H*0.5, 0, W*0.5, H*0.5, glowR);
-      gg.addColorStop(0,  `rgba(220,150,110,${(nameAlpha*0.35).toFixed(3)})`);
-      gg.addColorStop(1,  'rgba(200,130,110,0)');
-      ic.fillStyle = gg; ic.fillRect(0,0,W,H);
-      // Title text with scale
+      const fs = Math.min(W*0.14, 64);
+      ic.globalAlpha = nameAlpha;
+      const glowR = Math.min(W,H)*(0.12+nameP*0.22);
+      const gg = ic.createRadialGradient(W*.5,H*.5,0,W*.5,H*.5,glowR);
+      gg.addColorStop(0, `rgba(220,150,110,${(nameAlpha*0.32).toFixed(3)})`);
+      gg.addColorStop(1, 'rgba(200,130,110,0)');
+      ic.fillStyle=gg; ic.fillRect(0,0,W,H);
       ic.translate(W*0.5, H*0.5);
       ic.scale(scale, scale);
-      ic.shadowColor  = `rgba(200,130,110,${(nameAlpha * 0.7).toFixed(2)})`;
-      ic.shadowBlur   = 32 + nameP * 20;
-      ic.fillStyle    = `rgba(220,170,140,1)`;
-      ic.font         = `300 italic ${fs}px 'Cormorant Garamond', Georgia, serif`;
-      ic.textAlign    = 'center';
-      ic.textBaseline = 'middle';
+      ic.shadowColor=`rgba(200,130,110,${(nameAlpha*0.7).toFixed(2)})`;
+      ic.shadowBlur = 32 + nameP*20;
+      ic.fillStyle='rgba(220,170,140,1)';
+      ic.font=`300 italic ${fs}px 'Cormorant Garamond',Georgia,serif`;
+      ic.textAlign='center'; ic.textBaseline='middle';
       ic.fillText('Resonance', 0, 0);
       ic.restore();
     }
 
-    // Canvas fade out at end — smooth crossfade
+    // Fade to black — then endIntroAnimation handles home fade-in
     if (p > 0.88) {
-      const fadeOut = Math.min(1, (p - 0.88) / 0.12);
+      const fadeOut = Math.min(1, (p-0.88)/0.12);
       ic.save();
       ic.globalAlpha = fadeOut;
-      ic.fillStyle   = `#080610`;
-      ic.fillRect(0, 0, W, H);
+      ic.fillStyle = '#080610';
+      ic.fillRect(0,0,W,H);
       ic.restore();
     }
 
-    // Show skip hint after 2s
     if (t === 120 && skip) skip.classList.add('visible');
 
     if (t < TOTAL) {
@@ -2056,13 +2028,33 @@ function endIntroAnimation() {
   introPlayed = true;
   const skip = document.getElementById('introSkip');
   if (skip) skip.classList.remove('visible');
-  // Waves are already at WAVE_TOP_FRAC / WAVE_BOT_FRAC — crossfade is seamless
-  showScreen('s-home', () => {
-    document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
-    setTimeout(tryDrone, 200);
-  });
+
+  // Fade home in over intro — seamless
+  const home  = document.getElementById('s-home');
+  const intro = document.getElementById('s-intro');
+
+  // Home starts invisible, fades in
+  if (home) {
+    home.style.opacity = '0';
+    home.style.transition = 'none';
+    home.classList.add('active');
+  }
+  if (intro) intro.classList.remove('active');
+
   applyLang();
   applyDawnPalette();
+  document.querySelectorAll('.al').forEach(a => a.classList.add('on'));
+
+  // Fade home in
+  requestAnimationFrame(() => {
+    if (home) {
+      home.style.transition = 'opacity 0.9s ease';
+      home.style.opacity = '1';
+      setTimeout(() => { home.style.transition = ''; home.style.opacity = ''; }, 950);
+    }
+  });
+
+  setTimeout(tryDrone, 400);
 }
 
 // ── INTEGRATE WAVE CONVERGENCE ──
