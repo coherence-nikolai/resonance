@@ -385,10 +385,11 @@ class BreathOrb {
 
       tR = 9 + (this.MAX_RADIUS - 9) * breathP;
       tB = breathP * 11;
-      // Glow: dim when expanded (inhale), bright when contracted (exhale)
-      const baseGlow = 1.05 - breathP * 0.62;
-      const bonus    = Math.min(this.cycleCount * 0.28, 0.85);
-      tG = baseGlow + bonus * (1 - breathP);
+      // Pure smooth curve — glow inversely follows breathP with no conditionals
+      // Bright when contracted (exhale/rest), dim when expanded (inhale/hold)
+      // cycleCount bonus eases in gradually, never jumps
+      const cycleBonus = Math.min(this.cycleCount / this.maxCycles, 1) * 0.6;
+      tG = 0.42 + (0.85 + cycleBonus) * (1 - breathP);
 
       // Phase change events for audio/text/dots — fired once per crossing
       const prevCt = Math.max(0, this.breathClock - 16) % CYCLE;
@@ -1356,45 +1357,47 @@ async function fetchPolarityComplement(tok, pL, fwd, pH2) {
 
 // ── ANCHOR SCREEN 2 — frequency selection ──
 const FREQ_MAP = {
-  Anxious:      ['Steady','Present','Trusting','Held'],
-  Afraid:       ['Steady','Trusting','Held','Present'],
-  Dreading:     ['Present','Trusting','Steady','Open'],
-  Panicking:    ['Steady','Present','Held','Spacious'],
-  Unsafe:       ['Held','Steady','Trusting','Present'],
-  Overwhelmed:  ['Spacious','Steady','Present','Clear'],
-  Scattered:    ['Clear','Present','Steady','Spacious'],
-  Fragmented:   ['Spacious','Held','Clear','Steady'],
-  Spinning:     ['Steady','Present','Spacious','Clear'],
-  Flooded:      ['Spacious','Steady','Present','Held'],
-  Stuck:        ['Open','Clear','Trusting','Present'],
-  Frozen:       ['Open','Trusting','Present','Steady'],
-  Paralysed:    ['Present','Open','Steady','Trusting'],
-  Trapped:      ['Open','Spacious','Trusting','Clear'],
-  Contracted:   ['Open','Spacious','Luminous','Trusting'],
-  Heavy:        ['Spacious','Held','Open','Luminous'],
-  Exhausted:    ['Held','Spacious','Steady','Present'],
-  Depleted:     ['Held','Steady','Spacious','Trusting'],
-  Defeated:     ['Trusting','Open','Held','Luminous'],
-  Hopeless:     ['Luminous','Trusting','Open','Held'],
-  Disconnected: ['Held','Open','Present','Spacious'],
-  Alone:        ['Held','Present','Open','Trusting'],
-  Unseen:       ['Present','Held','Luminous','Open'],
-  Abandoned:    ['Held','Trusting','Present','Steady'],
-  Invisible:    ['Luminous','Present','Held','Open'],
-  Unworthy:     ['Luminous','Trusting','Held','Present'],
-  Ashamed:      ['Held','Luminous','Open','Trusting'],
-  'Not enough': ['Luminous','Trusting','Spacious','Open'],
-  Broken:       ['Held','Trusting','Open','Luminous'],
-  Hollow:       ['Luminous','Open','Held','Spacious'],
-  Angry:        ['Spacious','Clear','Open','Present'],
-  Resentful:    ['Open','Clear','Spacious','Present'],
-  Bitter:       ['Open','Luminous','Spacious','Trusting'],
-  Jealous:      ['Open','Trusting','Spacious','Clear'],
-  Grieving:     ['Held','Spacious','Open','Luminous'],
-  Numb:         ['Present','Open','Luminous','Held'],
-  Flat:         ['Luminous','Open','Present','Spacious'],
-  Empty:        ['Open','Luminous','Spacious','Held'],
-  Absent:       ['Present','Open','Held','Luminous'],
+  Anxious:       ['Steady','Present','Trusting','Held'],
+  Afraid:        ['Steady','Trusting','Held','Present'],
+  Dreading:      ['Present','Trusting','Steady','Open'],
+  Panicking:     ['Steady','Present','Held','Spacious'],
+  Unsafe:        ['Held','Steady','Trusting','Present'],
+  Overwhelmed:   ['Spacious','Steady','Present','Clear'],
+  Scattered:     ['Clear','Present','Steady','Spacious'],
+  Spiralling:    ['Steady','Present','Spacious','Clear'],
+  Swamped:       ['Spacious','Steady','Present','Held'],
+  Restless:      ['Present','Steady','Clear','Open'],
+  Stuck:         ['Open','Clear','Trusting','Present'],
+  Frozen:        ['Open','Trusting','Present','Steady'],
+  Trapped:       ['Open','Spacious','Trusting','Clear'],
+  'Closed off':  ['Open','Spacious','Luminous','Trusting'],
+  Confused:      ['Clear','Present','Steady','Open'],
+  Heavy:         ['Spacious','Held','Open','Luminous'],
+  Exhausted:     ['Held','Spacious','Steady','Present'],
+  Drained:       ['Held','Steady','Spacious','Trusting'],
+  Defeated:      ['Trusting','Open','Held','Luminous'],
+  'No way out':  ['Luminous','Trusting','Open','Held'],
+  Disconnected:  ['Held','Open','Present','Spacious'],
+  Alone:         ['Held','Present','Open','Trusting'],
+  Unseen:        ['Present','Held','Luminous','Open'],
+  'Left behind': ['Held','Trusting','Present','Steady'],
+  Invisible:     ['Luminous','Present','Held','Open'],
+  'Not enough':  ['Luminous','Trusting','Spacious','Open'],
+  Ashamed:       ['Held','Luminous','Open','Trusting'],
+  Guilty:        ['Open','Trusting','Clear','Held'],
+  Broken:        ['Held','Trusting','Open','Luminous'],
+  Raw:           ['Held','Spacious','Present','Open'],
+  Angry:         ['Spacious','Clear','Open','Present'],
+  Resentful:     ['Open','Clear','Spacious','Present'],
+  Bitter:        ['Open','Luminous','Spacious','Trusting'],
+  Jealous:       ['Open','Trusting','Spacious','Clear'],
+  Grieving:      ['Held','Spacious','Open','Luminous'],
+  Numb:          ['Present','Open','Luminous','Held'],
+  Flat:          ['Luminous','Open','Present','Spacious'],
+  'Not here':    ['Present','Open','Held','Luminous'],
+  Lost:          ['Present','Steady','Trusting','Open'],
+  'Given up':    ['Trusting','Held','Open','Luminous'],
+  Pressured:     ['Spacious','Steady','Clear','Present'],
 };
 
 function advanceToFreq() {
@@ -1559,19 +1562,27 @@ function launchIntegrate() {
   triggerWaveConvergence(); // dramatic visual payoff
   setText('pname-integrate', t.integrateLabel.toUpperCase());
 
-  // Witnessed sentence — AI generated, falls back to static
+  // Witnessed sentence — wait for AI, fall back to static only if AI fails
   const witnessedEl = document.getElementById('integrateWitnessed');
   const wKey        = currentContraction;
   const staticWitnessed = (WITNESSED[lang] && WITNESSED[lang][wKey]) || '';
-  if (witnessedEl) { witnessedEl.textContent = staticWitnessed; witnessedEl.classList.remove('visible'); }
+  // Start hidden — no text set yet to avoid swap flicker
+  if (witnessedEl) { witnessedEl.textContent = ''; witnessedEl.classList.remove('visible'); }
 
-  // Try AI-generated witnessed sentence in background
   const lastThreadForWitness = lsGet('f2_thread');
-  fetchWitnessedSentence(tok, currentContraction, currentBodyZone, chosenFrequency, lastThreadForWitness)
-    .then(aiWitnessed => {
+  const apiKey = lsGet('f2_api_key');
+
+  // Resolve witnessed sentence before showing it
+  const resolveWitnessed = async () => {
+    if (apiKey) {
+      const aiWitnessed = await fetchWitnessedSentence(tok, currentContraction, currentBodyZone, chosenFrequency, lastThreadForWitness);
       if (!isAlive(tok) || !witnessedEl) return;
-      if (aiWitnessed) witnessedEl.textContent = aiWitnessed;
-    });
+      witnessedEl.textContent = aiWitnessed || staticWitnessed;
+    } else {
+      if (witnessedEl) witnessedEl.textContent = staticWitnessed;
+    }
+  };
+  resolveWitnessed();
 
   // Whisper — past session thread
   const whisperEl = document.getElementById('integrateWhisper');
