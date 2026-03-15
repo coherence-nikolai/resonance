@@ -351,46 +351,68 @@ class BreathOrb {
       const p = Math.min(t / this.SETTLE, 1);
       tR = 9 + 4 * Math.sin(p * Math.PI * 1.5);
       tB = 0; tG = 0.6 + 0.2 * Math.sin(p * Math.PI);
-      if (t > this.SETTLE) this.startPhase('inhale');
-
-    } else if (this.phase === 'inhale') {
-      const p    = Math.min(t / this.INHALE, 1);
-      const ease = 1 - Math.pow(1 - p, 3);
-      tR = 9 + (this.MAX_RADIUS - 9) * ease;
-      tB = 0 + 12 * ease;
-      // Glow dims continuously on inhale — going inward
-      tG = 1.1 - 0.65 * ease;
-      if (t > this.INHALE) { this.ripples.push({r: this.dispRadius * 0.8, alpha: 0.5}); this.startPhase('hold'); }
-
-    } else if (this.phase === 'hold') {
-      tR = this.MAX_RADIUS; tB = 12;
-      // Suspended — glow at its dimmest
-      tG = 0.45;
-      if (t > this.HOLD) this.startPhase('exhale');
-
-    } else if (this.phase === 'exhale') {
-      const p    = Math.min(t / this.EXHALE, 1);
-      const ease = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2,2)/2;
-      tR = this.MAX_RADIUS - (this.MAX_RADIUS - 12) * ease;
-      tB = 12 - 12 * ease;
-      // Glow brightens continuously on exhale — coming outward
-      const brightBonus = this.cycleCount === 2 ? 0.9 : this.cycleCount === 1 ? 0.5 : 0.2;
-      tG = 0.45 + (0.85 + brightBonus) * ease;
-      if (t < 60 && this.ripples.length === 0) this.ripples.push({r: 18, alpha: 0.7});
-      if (t > this.EXHALE) {
-        this.cycleCount++;
-        if (this.cycleCount >= this.maxCycles) {
-          this.startPhase('crystallised');
-          if (this.onCyclesDone) setTimeout(() => this.onCyclesDone(), 600);
-        } else { this.startPhase('rest'); }
+      if (t > this.SETTLE) {
+        this.breathClock = 0;
+        this.startPhase('inhale');
       }
 
-    } else if (this.phase === 'rest') {
-      // Bridge smoothly — tG eases toward inhale start value
-      tR = this.dispRadius * 0.88 + 11 * 0.12;
-      tB = this.dispBlur * 0.80;
-      tG = 1.05;
-      if (t > this.REST) this.startPhase('inhale');
+    } else if (this.phase === 'inhale' || this.phase === 'hold' ||
+               this.phase === 'exhale' || this.phase === 'rest') {
+      // ── CONTINUOUS BREATH — one smooth curve, no phase boundaries ──
+      const CYCLE = this.INHALE + this.HOLD + this.EXHALE + this.REST;
+      if (this.breathClock === undefined) this.breathClock = 0;
+      this.breathClock += 16;
+      const ct  = this.breathClock % CYCLE;
+      const cp  = ct / CYCLE;
+      const iP  = this.INHALE / CYCLE;
+      const hP  = (this.INHALE + this.HOLD) / CYCLE;
+      const eP  = (this.INHALE + this.HOLD + this.EXHALE) / CYCLE;
+
+      // Smooth breathP: 0=contracted, 1=fully expanded
+      let breathP;
+      if (cp < iP) {
+        const x = cp / iP;
+        breathP = 1 - Math.pow(1 - x, 2.5);
+      } else if (cp < hP) {
+        breathP = 1.0;
+      } else if (cp < eP) {
+        const x = (cp - hP) / (eP - hP);
+        breathP = 1 - (x < 0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2);
+      } else {
+        const x = (cp - eP) / (1 - eP);
+        breathP = 0.05 * (1 - x); // gentle rest near zero
+      }
+
+      tR = 9 + (this.MAX_RADIUS - 9) * breathP;
+      tB = breathP * 11;
+      // Glow: dim when expanded (inhale), bright when contracted (exhale)
+      const baseGlow = 1.05 - breathP * 0.62;
+      const bonus    = Math.min(this.cycleCount * 0.28, 0.85);
+      tG = baseGlow + bonus * (1 - breathP);
+
+      // Phase change events for audio/text/dots — fired once per crossing
+      const prevCt = Math.max(0, this.breathClock - 16) % CYCLE;
+      const prevCp = prevCt / CYCLE;
+
+      if (prevCp > 0.95 && cp < 0.05) {
+        if (this.onPhaseChange) this.onPhaseChange('inhale', this.cycleCount);
+      }
+      if (prevCp < hP && cp >= hP) {
+        this.ripples.push({r: this.dispRadius * 0.8, alpha: 0.5});
+        if (this.onPhaseChange) this.onPhaseChange('hold', this.cycleCount);
+      }
+      if (prevCp < hP + 0.01 && cp >= hP + 0.01 && cp < hP + 0.03) {
+        if (this.onPhaseChange) this.onPhaseChange('exhale', this.cycleCount);
+      }
+      if (prevCp < eP && cp >= eP) {
+        this.cycleCount++;
+        if (this.onPhaseChange) this.onPhaseChange('rest', this.cycleCount - 1);
+        if (this.cycleCount >= this.maxCycles) {
+          this.breathClock = 0;
+          this.startPhase('crystallised');
+          if (this.onCyclesDone) setTimeout(() => this.onCyclesDone(), 600);
+        }
+      }
 
     } else if (this.phase === 'crystallised') {
       tR = 12 + 5 * Math.sin(t * 0.002);
@@ -398,15 +420,13 @@ class BreathOrb {
       this.wordGlowIntensity = 1;
 
     } else if (this.phase === 'morph') {
-      // Full-screen bloom — expands to fill, rose-violet blend, then dissolves
       const p    = Math.min(t / this.MORPH_DURATION, 1);
-      const ease = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2,2)/2;
+      const ease = p < 0.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
       const FULL = Math.max(innerWidth, innerHeight) * 0.85;
-      tR = 12 + (FULL - 12) * ease;  // expand to near full screen
-      tB = ease * 28;                  // heavy blur at peak
-      // Hold glow bright until 70% then fade
+      tR = 12 + (FULL - 12) * ease;
+      tB = ease * 28;
       tG = p < 0.7 ? 1.8 : 1.8 * (1 - (p - 0.7) / 0.3);
-      this.alpha = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4; // fade alpha from 60% onward
+      this.alpha = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
       this.wordScale = Math.max(0, 1 - ease * 1.4);
       if (t > this.MORPH_DURATION) {
         this.phase = 'done';
@@ -414,7 +434,7 @@ class BreathOrb {
       }
     }
 
-    const ls = this.phase === 'exhale' ? 0.038 : 0.028;
+    const ls = 0.022; // uniform slow easing — no sudden jumps
     this.dispRadius += ((tR||9)  - this.dispRadius) * ls;
     this.dispBlur   += ((tB||0)  - this.dispBlur)   * ls;
     this.dispGlow   += ((tG||1)  - this.dispGlow)   * ls;
@@ -1866,31 +1886,31 @@ function playIntroAnimation() {
     drawIntroWave(iViolet);
 
     // Text 1: "what you hold" — ABOVE rose wave, clear of it
-    const t1p    = Math.min(1, Math.max(0, (p-0.10)/0.08));
-    const t1fade = p > 0.28 ? Math.max(0, 1-(p-0.28)/0.10) : 1;
+    const t1p    = Math.min(1, Math.max(0, (p-0.08)/0.18)); // slow 2s fade in
+    const t1fade = p > 0.32 ? Math.max(0, 1-(p-0.32)/0.14) : 1; // gentle fade out
     if (t1p > 0.01) {
-      const textY = H * INTRO_ROSE_Y - H * 0.08; // above rose wave
+      const textY = H * INTRO_ROSE_Y - H * 0.09;
       ic.save();
       ic.globalAlpha = t1p * t1fade * 0.88;
       ic.font = `300 italic ${Math.min(W*0.065,28)}px 'Cormorant Garamond',Georgia,serif`;
       ic.textAlign='center'; ic.textBaseline='middle';
       ic.fillStyle='rgba(200,130,110,1)';
-      ic.shadowColor='rgba(200,130,110,0.4)'; ic.shadowBlur=12;
+      ic.shadowColor='rgba(200,130,110,0.35)'; ic.shadowBlur=10;
       ic.fillText(lang==='en'?'what you hold':'lo que sostienes', W*0.5, textY);
       ic.restore();
     }
 
     // Text 2: "what is also true" — BELOW violet wave, clear of it
-    const t2p    = Math.min(1, Math.max(0, (p-0.28)/0.08));
-    const t2fade = p > 0.48 ? Math.max(0, 1-(p-0.48)/0.10) : 1;
+    const t2p    = Math.min(1, Math.max(0, (p-0.26)/0.18)); // slow 2s fade in
+    const t2fade = p > 0.52 ? Math.max(0, 1-(p-0.52)/0.14) : 1;
     if (t2p > 0.01) {
-      const textY = H * INTRO_VIOLET_Y + H * 0.08; // below violet wave
+      const textY = H * INTRO_VIOLET_Y + H * 0.09;
       ic.save();
       ic.globalAlpha = t2p * t2fade * 0.82;
       ic.font = `300 italic ${Math.min(W*0.065,28)}px 'Cormorant Garamond',Georgia,serif`;
       ic.textAlign='center'; ic.textBaseline='middle';
       ic.fillStyle='rgba(152,128,184,1)';
-      ic.shadowColor='rgba(152,128,184,0.4)'; ic.shadowBlur=12;
+      ic.shadowColor='rgba(152,128,184,0.35)'; ic.shadowBlur=10;
       ic.fillText(lang==='en'?'what is also true':'lo que también es verdad', W*0.5, textY);
       ic.restore();
     }
