@@ -2194,19 +2194,16 @@ function playIntroAnimation() {
       ic.restore();
     }
 
-    // Text 3: Resonance — glow bloom arrives first, word emerges from it
-    // Glow starts at p=0.62, word starts at p=0.72, hold until p=0.88, fade to black p=0.88-1.0
-    const glowOnlyP = Math.min(1, Math.max(0, (p-0.62)/0.14)); // glow arrives first
-    const nameP     = Math.min(1, Math.max(0, (p-0.72)/0.20)); // word emerges slowly
+    // Glow bloom arrives first — expands slowly from p=0.58
+    const glowOnlyP = Math.min(1, Math.max(0, (p-0.58)/0.18));
     const nameFade  = p > 0.90 ? Math.max(0, 1-(p-0.90)/0.10) : 1;
 
     if (glowOnlyP > 0.01) {
       const glowAlpha = glowOnlyP * nameFade;
       ic.save();
-      // Glow bloom — expands as it arrives
-      const glowR = Math.min(W,H) * (0.08 + glowOnlyP * 0.32);
+      const glowR = Math.min(W,H) * (0.06 + glowOnlyP * 0.36);
       const gg = ic.createRadialGradient(W*.5, H*.5, 0, W*.5, H*.5, glowR);
-      gg.addColorStop(0,   `rgba(230,160,120,${(glowAlpha*0.38).toFixed(3)})`);
+      gg.addColorStop(0,   `rgba(230,160,120,${(glowAlpha*0.40).toFixed(3)})`);
       gg.addColorStop(0.4, `rgba(200,130,110,${(glowAlpha*0.18).toFixed(3)})`);
       gg.addColorStop(1,   'rgba(200,130,110,0)');
       ic.fillStyle = gg;
@@ -2214,17 +2211,22 @@ function playIntroAnimation() {
       ic.restore();
     }
 
-    if (nameP > 0.005) {
-      const nameAlpha = nameP * nameFade;
-      const scale = 0.90 + nameP * 0.10; // gentle scale 0.90→1.0
+    // Text fades in very gradually — starts at p=0.72, takes 4s to reach full opacity
+    // First frames nearly invisible so there's no sudden pop
+    const nameP = Math.min(1, Math.max(0, (p-0.72)/0.22));
+    // Apply cubic ease so early frames are extremely faint
+    const nameAlphaCurved = Math.pow(nameP, 2.5) * nameFade;
+
+    if (nameAlphaCurved > 0.002) {
+      const scale = 0.92 + nameP * 0.08;
       ic.save();
       const fs = Math.min(W*0.13, 60);
-      ic.globalAlpha = nameAlpha;
+      ic.globalAlpha = nameAlphaCurved;
       ic.translate(W*0.5, H*0.5);
       ic.scale(scale, scale);
-      ic.shadowColor = `rgba(220,160,130,${(nameAlpha*0.65).toFixed(2)})`;
-      ic.shadowBlur  = 24 + nameP * 18;
-      ic.fillStyle   = `rgba(230,185,155,1)`;
+      ic.shadowColor = `rgba(220,160,130,${(nameAlphaCurved*0.6).toFixed(3)})`;
+      ic.shadowBlur  = 20 + nameP * 16;
+      ic.fillStyle   = `rgba(235,190,160,1)`;
       ic.font        = `300 italic ${fs}px 'Cormorant Garamond',Georgia,serif`;
       ic.textAlign   = 'center';
       ic.textBaseline= 'middle';
@@ -2232,7 +2234,7 @@ function playIntroAnimation() {
       ic.restore();
     }
 
-    // Fade everything to black — smooth, glow and word dissolve together
+    // Fade everything to black together
     if (p > 0.90) {
       const fadeOut = Math.min(1, (p-0.90)/0.10);
       ic.save();
