@@ -1930,8 +1930,8 @@ function playIntroAnimation() {
   const TOTAL = 1500;
 
   // Waves at 30%/70% — clearly visible, in relationship, clear of edges
-  const INTRO_ROSE_Y   = 0.30;
-  const INTRO_VIOLET_Y = 0.70;
+  const INTRO_ROSE_Y   = 0.35;
+  const INTRO_VIOLET_Y = 0.65;
   const iRose   = { phase: 0, phaseV: 0.022, amp: 0.055, y: INTRO_ROSE_Y,   color: '200,130,110', alpha: 0 };
   const iViolet = { phase: Math.PI*0.6, phaseV: 0.028, amp: 0.050, y: INTRO_VIOLET_Y, color: '152,128,184', alpha: 0 };
 
@@ -1997,11 +1997,11 @@ function playIntroAnimation() {
     drawIntroWave(iRose);
     drawIntroWave(iViolet);
 
-    // Text 1: "what you hold" — ABOVE rose wave, clear of it
-    const t1p    = Math.min(1, Math.max(0, (p-0.08)/0.18)); // slow 2s fade in
-    const t1fade = p > 0.32 ? Math.max(0, 1-(p-0.32)/0.14) : 1; // gentle fade out
+    // Text 1: "what you hold" — ABOVE rose wave
+    const t1p    = Math.min(1, Math.max(0, (p-0.08)/0.18));
+    const t1fade = p > 0.32 ? Math.max(0, 1-(p-0.32)/0.14) : 1;
     if (t1p > 0.01) {
-      const textY = H * INTRO_ROSE_Y - H * 0.09;
+      const textY = H * INTRO_ROSE_Y - H * 0.07;
       ic.save();
       ic.globalAlpha = t1p * t1fade * 0.88;
       ic.font = `300 italic ${Math.min(W*0.065,28)}px 'Cormorant Garamond',Georgia,serif`;
@@ -2012,11 +2012,11 @@ function playIntroAnimation() {
       ic.restore();
     }
 
-    // Text 2: "what is also true" — BELOW violet wave, clear of it
-    const t2p    = Math.min(1, Math.max(0, (p-0.26)/0.18)); // slow 2s fade in
+    // Text 2: "what is also true" — BELOW violet wave
+    const t2p    = Math.min(1, Math.max(0, (p-0.26)/0.18));
     const t2fade = p > 0.52 ? Math.max(0, 1-(p-0.52)/0.14) : 1;
     if (t2p > 0.01) {
-      const textY = H * INTRO_VIOLET_Y + H * 0.09;
+      const textY = H * INTRO_VIOLET_Y + H * 0.07;
       ic.save();
       ic.globalAlpha = t2p * t2fade * 0.82;
       ic.font = `300 italic ${Math.min(W*0.065,28)}px 'Cormorant Garamond',Georgia,serif`;
